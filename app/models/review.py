@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
-from app.database import Base
+from database import Base
 
 
 class Review(Base):

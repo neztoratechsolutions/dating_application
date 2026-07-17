@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models.state import State
+from database import SessionLocal
+from models.state import State
 
 router = APIRouter(
     prefix="/states",

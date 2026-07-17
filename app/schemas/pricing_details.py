@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from decimal import Decimal
-from app.models.pricing_details import PricingDetail
+from models.pricing_details import PricingDetail
 
 
 class PricingDetailCreate(BaseModel):

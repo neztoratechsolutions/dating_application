@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models.gift_master import GiftMaster
-from app.schemas.gift_master import (GiftCreate,GiftUpdate,GiftResponse)
+from database import SessionLocal
+from models.gift_master import GiftMaster
+from schemas.gift_master import (GiftCreate,GiftUpdate,GiftResponse)
 
 router = APIRouter(prefix="/gifts",tags=["Gift Master"])
 
