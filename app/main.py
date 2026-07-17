@@ -1,11 +1,15 @@
 from fastapi import FastAPI
-from database import engine
+
+from app.database import engine, Base
+from app.models.state import State
+from app.routes.state import router as state_router
+
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
     title="Dating Application API",
     version="1.0.0"
 )
 
-
-@app.get("/health_check")
-def root():
-    return {"message": "Dating Application API is Running 🚀"}
+app.include_router(state_router)
