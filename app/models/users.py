@@ -5,7 +5,7 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
-    Text,
+    Text,Enum
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
