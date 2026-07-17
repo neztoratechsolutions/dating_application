@@ -36,6 +36,14 @@ class User(Base):
     # Account Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
-
+    gender = Column(
+    Enum("Male", "Female", "Other", name="gender_enum"),
+    nullable=False
+)
+    role = Column(
+    Enum("admin", "creator", "customer", name="role_enum"),
+    nullable=False,
+    default="customer"
+)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
