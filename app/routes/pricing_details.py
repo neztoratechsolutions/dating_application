@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from models.pricing_details import PricingDetail
+from models.users import User
 from schemas.pricing_details import (PricingDetailCreate,PricingDetailUpdate,PricingDetailResponse)
 
 router = APIRouter(prefix="/pricing-details",tags=["Pricing Details"])
@@ -16,18 +17,33 @@ def get_db():
         db.close()
 
 
-@router.post("/", response_model=PricingDetailResponse)
+@router.post(
+    "/",
+    response_model=PricingDetailResponse,
+    status_code=status.HTTP_201_CREATED
+)
 def create_pricing_detail(
     data: PricingDetailCreate,
     db: Session = Depends(get_db)
 ):
+
+    user = db.query(User).filter(
+        User.id == data.user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
     existing = db.query(PricingDetail).filter(
         PricingDetail.user_id == data.user_id
     ).first()
 
     if existing:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Pricing detail already exists for this user"
         )
 
@@ -40,14 +56,22 @@ def create_pricing_detail(
     return pricing
 
 
-@router.get("/", response_model=list[PricingDetailResponse])
+@router.get(
+    "/",
+    response_model=list[PricingDetailResponse],
+    status_code=status.HTTP_200_OK
+)
 def get_pricing_details(
     db: Session = Depends(get_db)
 ):
     return db.query(PricingDetail).all()
 
 
-@router.get("/{pricing_id}", response_model=PricingDetailResponse)
+@router.get(
+    "/{pricing_id}",
+    response_model=PricingDetailResponse,
+    status_code=status.HTTP_200_OK
+)
 def get_pricing_detail(
     pricing_id: int,
     db: Session = Depends(get_db)
@@ -58,14 +82,18 @@ def get_pricing_detail(
 
     if not pricing:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Pricing detail not found"
         )
 
     return pricing
 
 
-@router.put("/{pricing_id}", response_model=PricingDetailResponse)
+@router.put(
+    "/{pricing_id}",
+    response_model=PricingDetailResponse,
+    status_code=status.HTTP_200_OK
+)
 def update_pricing_detail(
     pricing_id: int,
     data: PricingDetailUpdate,
@@ -77,7 +105,7 @@ def update_pricing_detail(
 
     if not pricing:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Pricing detail not found"
         )
 
@@ -90,7 +118,10 @@ def update_pricing_detail(
     return pricing
 
 
-@router.delete("/{pricing_id}")
+@router.delete(
+    "/{pricing_id}",
+    status_code=status.HTTP_200_OK
+)
 def delete_pricing_detail(
     pricing_id: int,
     db: Session = Depends(get_db)
@@ -101,7 +132,7 @@ def delete_pricing_detail(
 
     if not pricing:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Pricing detail not found"
         )
 
