@@ -7,10 +7,11 @@ from sqlalchemy import (
     DateTime,
     Text,Enum
 )
+from sqlalchemy import (Column,String,Boolean,DateTime,Text,Integer,ForeignKey)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
-from database import Base
+from app.database import Base
 
 
 class User(Base):
