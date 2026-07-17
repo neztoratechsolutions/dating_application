@@ -11,7 +11,7 @@ from sqlalchemy import (Column,String,Boolean,DateTime,Text,Integer,ForeignKey)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
-from app.database import Base
+from database import Base
 
 
 class User(Base):

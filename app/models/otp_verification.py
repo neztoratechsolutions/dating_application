@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
-from app.database import Base
+from database import Base
 
 
 class OTPVerification(Base):

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from decimal import Decimal
-from app.models.gift_master import GiftMaster
+from models.gift_master import GiftMaster
 
 
 class GiftCreate(BaseModel):

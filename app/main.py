@@ -1,17 +1,17 @@
 from fastapi import FastAPI
 
-from app.database import engine, Base
-from app.models.state import State
-from app.models.gift_master import GiftMaster
-from app.models.users import User
-from app.models.pricing_details import PricingDetail
+from database import engine, Base
+from models.state import State
+from models.gift_master import GiftMaster
+from models.users import User
+from models.pricing_details import PricingDetail
 
 
 
-from app.routes.state import router as state_router
-from app.routes.gift_master import router as gift_router
-from app.routes.users import router as user_router
-from app.routes.pricing_details import router as pricing_router
+from routes.state import router as state_router
+from routes.gift_master import router as gift_router
+from routes.users import router as user_router
+from routes.pricing_details import router as pricing_router
 
 
 
