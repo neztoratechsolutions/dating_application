@@ -7,11 +7,11 @@ from models.users import User
 from models.pricing_details import PricingDetail
 
 
-from app.routes.state import router as state_router
-from app.routes.gift_master import router as gift_router
-from app.routes.users import router as user_router
-from app.routes.pricing_details import router as pricing_router
-from app.routes.auth import router as auth_router
+from routes.state import router as state_router
+from routes.gift_master import router as gift_router
+from routes.users import router as user_router
+from routes.pricing_details import router as pricing_router
+from routes.auth import router as auth_router
 
 
 
