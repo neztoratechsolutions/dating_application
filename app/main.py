@@ -5,6 +5,7 @@ from models.state import State
 from models.gift_master import GiftMaster
 from models.users import User
 from models.pricing_details import PricingDetail
+from models.user_status import UserStatus
 
 
 from routes.state import router as state_router
@@ -12,6 +13,7 @@ from routes.gift_master import router as gift_router
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
 from routes.auth import router as auth_router
+from routes.user_status_create import router as user_status_router
 
 
 
@@ -27,3 +29,4 @@ app.include_router(gift_router)
 app.include_router(user_router)
 app.include_router(pricing_router)
 app.include_router(auth_router)
+app.include_router(user_status_router)
