@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Literal
 from models.users import User
 
 
@@ -12,6 +12,8 @@ class UserCreate(BaseModel):
     description: Optional[str] = None
     state_id: int
     profile_photo: Optional[str] = None
+    gender: Literal["Male", "Female", "Other"]
+
 
 
 class UserUpdate(BaseModel):
@@ -24,6 +26,8 @@ class UserUpdate(BaseModel):
     profile_photo: Optional[str] = None
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
+
+    gender: Optional[Literal["Male", "Female", "Other"]] = None
 
 
 class UserResponse(BaseModel):
@@ -38,6 +42,8 @@ class UserResponse(BaseModel):
     profile_photo: str | None
     is_active: bool
     is_verified: bool
+    gender: str
+    role: str
 
     class Config:
         from_attributes = True
