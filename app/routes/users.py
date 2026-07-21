@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import (APIRouter,Depends,HTTPException,status,UploadFile,File,Form)
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
@@ -20,18 +21,30 @@ def get_db():
 
 # ------------------------------------- USER CREATE -----------------------------------------------
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
 @router.post(
     "/users",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED
 )
 def create_user(
-    user: UserCreate,
+    email: str = Form(...),
+    phone: str = Form(...),
+    password: str = Form(...),
+    display_name: str = Form(...),
+    bio: str = Form(None),
+    description: str = Form(None),
+    state_id: int = Form(...),
+    gender: str = Form(...),
+    profile_photo: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     # Email check
     existing_user = db.query(User).filter(
-        User.email == user.email
+        User.email == email
     ).first()
 
     if existing_user:
@@ -42,7 +55,7 @@ def create_user(
 
     # Phone check
     existing_phone = db.query(User).filter(
-        User.phone == user.phone
+        User.phone == phone
     ).first()
 
     if existing_phone:
@@ -51,9 +64,9 @@ def create_user(
             detail="Mobile number already exists"
         )
 
-    if user.gender == "Male":
+    if gender == "Male":
         role = "customer"
-    elif user.gender == "Female":
+    elif gender == "Female":
         role = "creator"
     else:
         raise HTTPException(
@@ -61,16 +74,24 @@ def create_user(
             detail="Invalid gender"
         )
 
+    file_path = os.path.join(
+        UPLOAD_DIR,
+        profile_photo.filename
+    )
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(profile_photo.file.read())
+
     new_user = User(
-        email=user.email,
-        phone=user.phone,
-        password=hash_password(user.password),
-        display_name=user.display_name,
-        bio=user.bio,
-        description=user.description,
-        state_id=user.state_id,
-        profile_photo=user.profile_photo,
-        gender=user.gender,
+        email=email,
+        phone=phone,
+        password=hash_password(password),
+        display_name=display_name,
+        bio=bio,
+        description=description,
+        state_id=state_id,
+        profile_photo=file_path,
+        gender=gender,
         role=role,
         referral_code=generate_referral_code()
     )
@@ -82,8 +103,9 @@ def create_user(
     return new_user
 
 
-# ----------------------------------------------------- ADMIN_CREATE -----------------------------
-
+# -----------------------------------------------------
+# ADMIN CREATE
+# -----------------------------------------------------
 
 @router.post(
     "/admins",
@@ -91,12 +113,20 @@ def create_user(
     status_code=status.HTTP_201_CREATED
 )
 def create_admin(
-    user: UserCreate,
+    email: str = Form(...),
+    phone: str = Form(...),
+    password: str = Form(...),
+    display_name: str = Form(...),
+    bio: str = Form(None),
+    description: str = Form(None),
+    state_id: int = Form(...),
+    gender: str = Form(...),
+    profile_photo: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     # Email check
     existing_user = db.query(User).filter(
-        User.email == user.email
+        User.email == email
     ).first()
 
     if existing_user:
@@ -107,7 +137,7 @@ def create_admin(
 
     # Mobile number check
     existing_phone = db.query(User).filter(
-        User.phone == user.phone
+        User.phone == phone
     ).first()
 
     if existing_phone:
@@ -116,16 +146,24 @@ def create_admin(
             detail="Mobile number already exists"
         )
 
+    file_path = os.path.join(
+        UPLOAD_DIR,
+        profile_photo.filename
+    )
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(profile_photo.file.read())
+
     new_admin = User(
-        email=user.email,
-        phone=user.phone,
-        password=hash_password(user.password),
-        display_name=user.display_name,
-        bio=user.bio,
-        description=user.description,
-        state_id=user.state_id,
-        profile_photo=user.profile_photo,
-        gender=user.gender,
+        email=email,
+        phone=phone,
+        password=hash_password(password),
+        display_name=display_name,
+        bio=bio,
+        description=description,
+        state_id=state_id,
+        profile_photo=file_path,
+        gender=gender,
         role="admin",
         referral_code=generate_referral_code()
     )
@@ -175,7 +213,6 @@ def get_user(
 
 
 # --------------------------------------- Update_user --------------------------------------------
-
 @router.put(
     "/{user_id}",
     response_model=UserResponse,
@@ -183,10 +220,17 @@ def get_user(
 )
 def update_user(
     user_id: int,
-    data: UserUpdate,
+    email: str | None = Form(None),
+    phone: str | None = Form(None),
+    display_name: str | None = Form(None),
+    bio: str | None = Form(None),
+    description: str | None = Form(None),
+    state_id: int | None = Form(None),
+    is_active: bool | None = Form(None),
+    is_verified: bool | None = Form(None),
+    profile_photo: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 ):
-
     user = db.query(User).filter(
         User.id == user_id
     ).first()
@@ -197,30 +241,43 @@ def update_user(
             detail="User not found"
         )
 
-    update_data = data.model_dump(
-        exclude_unset=True
-    )
+    # Email validation
+    if email is not None:
 
-    
-    if update_data.get("state_id") == 0:
-        update_data.pop("state_id")
+        existing_email = db.query(User).filter(
+            User.email == email,
+            User.id != user_id
+        ).first()
 
-    
-    if "gender" in update_data:
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists"
+            )
 
-        if update_data["gender"] == "Male":
-            update_data["role"] = "customer"
+        user.email = email
 
-        elif update_data["gender"] == "Female":
-            update_data["role"] = "creator"
+    # Phone validation
+    if phone is not None:
 
-        elif update_data["gender"] == "Other":
-            update_data["role"] = user.role
+        existing_phone = db.query(User).filter(
+            User.phone == phone,
+            User.id != user_id
+        ).first()
 
-    
-    if "state_id" in update_data:
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mobile number already exists"
+            )
+
+        user.phone = phone
+
+    # State validation
+    if state_id is not None:
+
         state = db.query(State).filter(
-            State.id == update_data["state_id"]
+            State.id == state_id
         ).first()
 
         if not state:
@@ -229,13 +286,49 @@ def update_user(
                 detail="Invalid state_id"
             )
 
-    for key, value in update_data.items():
-        setattr(user, key, value)
+        user.state_id = state_id
+
+    if display_name is not None:
+        user.display_name = display_name
+
+    if bio is not None:
+        user.bio = bio
+
+    if description is not None:
+        user.description = description
+
+    if is_active is not None:
+        user.is_active = is_active
+
+    if is_verified is not None:
+        user.is_verified = is_verified
+
+    # Profile photo upload
+    if (
+        profile_photo is not None
+        and hasattr(profile_photo, "filename")
+        and profile_photo.filename
+    ):
+
+        file_path = os.path.join(
+            UPLOAD_DIR,
+            profile_photo.filename
+        )
+
+        with open(file_path, "wb") as buffer:
+            buffer.write(
+                profile_photo.file.read()
+            )
+
+        user.profile_photo = file_path
 
     db.commit()
     db.refresh(user)
 
     return user
+
+
+# ---------------------------------------------- DELETE ------------------------------------------
 
 
 @router.delete(
