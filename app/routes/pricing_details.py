@@ -64,7 +64,17 @@ def create_pricing_detail(
 def get_pricing_details(
     db: Session = Depends(get_db)
 ):
-    return db.query(PricingDetail).all()
+    pricing_details = db.query(
+        PricingDetail
+    ).all()
+
+    if not pricing_details:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No data found"
+        )
+
+    return pricing_details
 
 
 @router.get(
