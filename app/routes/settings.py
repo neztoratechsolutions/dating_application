@@ -83,6 +83,27 @@ def get_setting(
     return setting
 
 
+
+@router.get(
+    "/",
+    response_model=list[SettingResponse],
+    status_code=status.HTTP_200_OK
+)
+def get_all_settings(
+    db: Session = Depends(get_db)
+):
+    settings = db.query(Setting).all()
+
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No settings found"
+        )
+
+    return settings
+
+
+
 @router.put(
     "/{user_id}",
     response_model=SettingResponse,
