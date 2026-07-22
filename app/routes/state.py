@@ -5,8 +5,8 @@ from database import SessionLocal
 from models.state import State
 
 router = APIRouter(
-    prefix="/states",
-    tags=["States"]
+    prefix="/state",
+    tags=["State"]
 )
 
 
@@ -22,14 +22,29 @@ def get_db():
 # CREATE
 @router.post("/")
 def create_state(state_name: str, db: Session = Depends(get_db)):
+
+    existing_state = (
+        db.query(State)
+        .filter(State.state_name.ilike(state_name))
+        .first()
+    )
+
+    if existing_state:
+        raise HTTPException(
+            status_code=400,
+            detail="State already exists"
+        )
+
     state = State(state_name=state_name)
 
     db.add(state)
     db.commit()
     db.refresh(state)
 
-    return state
-
+    return {
+        "message": "State created successfully",
+        "data": state
+    }
 
 # GET ALL
 @router.get("/")
