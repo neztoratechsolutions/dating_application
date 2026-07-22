@@ -9,6 +9,7 @@ from models.user_status import UserStatus
 from models.gallery import Gallery
 from models.review import Review
 from models.settings import Setting
+from models.gift_details import GiftDetail
 
 
 from routes.state import router as state_router
@@ -20,6 +21,7 @@ from routes.user_status_create import router as user_status_router
 from routes.gallery import router as gallery_router
 from routes.review import router as review_router
 from routes.settings import router as setting_router
+from routes.gift_details import router as giftdetails_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -38,3 +40,4 @@ app.include_router(user_status_router)
 app.include_router(gallery_router)
 app.include_router(review_router)
 app.include_router(setting_router)
+app.include_router(giftdetails_router)
