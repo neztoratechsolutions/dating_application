@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-from models.users import User
+from typing import Optional, Literal
+
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
 class UserCreate(BaseModel):
@@ -11,7 +11,7 @@ class UserCreate(BaseModel):
     bio: Optional[str] = None
     description: Optional[str] = None
     state_id: int
-    profile_photo: Optional[str] = None
+    gender: Literal["Male", "Female", "Other"]
 
 
 class UserUpdate(BaseModel):
@@ -21,9 +21,9 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     description: Optional[str] = None
     state_id: Optional[int] = None
-    profile_photo: Optional[str] = None
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
+    gender: Optional[Literal["Male", "Female", "Other"]] = None
 
 
 class UserResponse(BaseModel):
@@ -38,6 +38,7 @@ class UserResponse(BaseModel):
     profile_photo: str | None
     is_active: bool
     is_verified: bool
+    gender: str
+    role: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
