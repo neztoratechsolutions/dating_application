@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
 
 from database import engine, Base
 
@@ -34,6 +36,9 @@ app = FastAPI(
     title="Dating Application API",
     version="1.0.0"
 )
+
+
+app.mount("/uploads",StaticFiles(directory="uploads"),name="uploads")
 
 
 # CORS middleware
