@@ -38,13 +38,13 @@ class FollowDetail(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    user_id = Column(
+    follower_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )
 
-    follower_id = Column(
+    following_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
