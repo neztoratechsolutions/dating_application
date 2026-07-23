@@ -1,10 +1,14 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
+from fastapi import Form, File, UploadFile
 from models.users import User
-from schemas.users import (UserCreate,UserUpdate,UserResponse)
+from models.state import State
+from schemas.users import (UserCreate,UserStatusUpdate,UserUpdate,UserResponse)
 from security import (hash_password,generate_referral_code)
+from fastapi import Request
 
 router = APIRouter(prefix="/users",tags=["Users"])
 
@@ -77,34 +81,41 @@ def get_user(
     return user
 
 
-@router.put("/{user_id}", response_model=UserResponse)
-def update_user(
-    user_id: int,
-    data: UserUpdate,
-    db: Session = Depends(get_db)
-):
 
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    display_name: str | None = Form(None),
+    bio: str | None = Form(None),
+    profile_photo: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
-    update_data = data.model_dump(
-        exclude_unset=True
-    )
+    if display_name is not None:
+        user.display_name = display_name
 
-    for key, value in update_data.items():
-        setattr(user, key, value)
+    if bio is not None:
+        user.bio = bio
+
+    if profile_photo is not None and profile_photo.filename:
+        os.makedirs("uploads", exist_ok=True)
+        file_path = os.path.join("uploads", profile_photo.filename)
+
+        with open(file_path, "wb") as buffer:
+            buffer.write(await profile_photo.read())
+
+        user.profile_photo = file_path
 
     db.commit()
     db.refresh(user)
 
     return user
+
+
 
 
 @router.delete("/{user_id}")
@@ -128,4 +139,35 @@ def delete_user(
 
     return {
         "message": "User deleted successfully"
+    }
+
+
+
+
+
+@router.patch("/{user_id}/status")
+def update_user_status(
+    user_id: int,
+    data: UserStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    user.status = data.status
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "User status updated successfully",
+        "user_id": user.id,
+        "status": user.status
     }
