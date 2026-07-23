@@ -1,5 +1,5 @@
 from typing import Optional, Literal
-
+from fastapi import File, UploadFile
 from pydantic import BaseModel, EmailStr, ConfigDict
 
 
@@ -15,15 +15,10 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
     display_name: Optional[str] = None
     bio: Optional[str] = None
-    description: Optional[str] = None
-    state_id: Optional[int] = None
-    is_active: Optional[bool] = None
-    is_verified: Optional[bool] = None
-    gender: Optional[Literal["Male", "Female", "Other"]] = None
+    profile_photo: Optional[str] = None
+
 
 
 class UserResponse(BaseModel):
@@ -42,3 +37,8 @@ class UserResponse(BaseModel):
     role: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+
+class UserStatusUpdate(BaseModel):
+    status: Literal["Active", "Inactive", "Ban"]
