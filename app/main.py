@@ -16,6 +16,7 @@ from models.settings import Setting
 from models.gift_details import GiftDetail
 from models.ad_setting import AdSetting
 from models.tags import Tag
+from models.cms_settings import PrivacyPolicy
 
 
 from routes.state import router as state_router
@@ -30,6 +31,7 @@ from routes.settings import router as setting_router
 from routes.gift_details import router as giftdetails_router
 from routes.ad_settings import router as adsettings_router
 from routes.tags import router as tags_router
+from routes.privacy_policy import router as privacy_router
 
 # Create FastAPI app first
 app = FastAPI(
@@ -68,3 +70,4 @@ app.include_router(setting_router)
 app.include_router(giftdetails_router)
 app.include_router(adsettings_router)
 app.include_router(tags_router)
+app.include_router(privacy_router)
