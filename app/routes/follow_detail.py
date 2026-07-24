@@ -10,6 +10,7 @@ from schemas.follow_details import (
     FollowDetailResponse,UserFollowResponse
 )
 from sqlalchemy.orm import aliased
+from models.users import User
 router = APIRouter(
     prefix="/follow-details",
     tags=["Follow Details"]
@@ -303,4 +304,29 @@ def delete_follow(
 
     return {
         "message": "Follow detail deleted successfully."
+    }
+
+@router.get("/status")
+def check_follow_status(
+    follower_id: int,
+    following_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Check whether a logged-in user follows a creator.
+    """
+
+    follow = (
+        db.query(FollowDetail)
+        .filter(
+            FollowDetail.follower_id == follower_id,
+            FollowDetail.following_id == following_id,
+            FollowDetail.follow_status == "following"
+        )
+        .first()
+    )
+
+    return {
+        "following": follow is not None,
+        "follow_id": follow.id if follow else None
     }
