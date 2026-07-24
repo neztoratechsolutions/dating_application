@@ -20,6 +20,7 @@ from models.cms_settings import PrivacyPolicy
 from models.cms_settings import CommunityGuideline
 from models.cms_settings import RefundPolicy
 from models.cms_models import CreatorAgreement
+from models.cms_models import SafetyPolicy
 
 
 from routes.state import router as state_router
@@ -39,6 +40,7 @@ from routes.terms_and_conditions import router as terms_and_conditions_router
 from routes.community_guidelines import router as community_guidelines_router
 from routes.refund_policy import router as refund_policy_router
 from routes.creator_agreement import router as creator_agreement_router
+from routes.safety_policy import router as safety_policy_router
 
 
 # Create FastAPI app first
@@ -83,3 +85,4 @@ app.include_router(terms_and_conditions_router)
 app.include_router(community_guidelines_router)
 app.include_router(refund_policy_router)
 app.include_router(creator_agreement_router)
+app.include_router(safety_policy_router)
