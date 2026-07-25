@@ -1,159 +1,260 @@
-from fastapi import (APIRouter,Depends,HTTPException,status)
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
+from sqlalchemy import func
 from database import get_db
+
 from models.ad_setting import AdSetting
-from schemas.ad_settings import (AdSettingCreate,AdSettingUpdate,AdSettingResponse)
+from models.ad_details import AdDetail
 
-router = APIRouter(prefix="/ad-settings",tags=["Ad Settings"])
+from schemas.ad_settings import (AdCreate,AdUpdate,AdResponse)
+
+router = APIRouter(prefix="/ad_settings",tags=["ad_settings"])
 
 
-# -------------------------------- CREATE --------------------------------
-
-
+# ==========================================
+# CREATE ADVERTISEMENT
+# ==========================================
 @router.post(
     "/",
-    response_model=AdSettingResponse,
+    response_model=AdResponse,
     status_code=status.HTTP_201_CREATED
 )
-def create_ad_setting(
-    data: AdSettingCreate,
+def create_ad(
+    data: AdCreate,
     db: Session = Depends(get_db)
 ):
-    ad_setting = AdSetting(
+    ad = AdSetting(
         title=data.title,
-        description=data.description,
-        placement=data.placement,
-        status=data.status
+        banner_url=data.banner_url,
+        redirect_url=data.redirect_url,
+        placement=data.placement.value,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        status=data.status.value
     )
 
-    db.add(ad_setting)
+    db.add(ad)
     db.commit()
-    db.refresh(ad_setting)
+    db.refresh(ad)
 
-    return ad_setting
+    ad_detail = AdDetail(
+        ad_id=ad.id,
+        impressions=0,
+        clicks=0,
+        ctr=0,
+        revenue=0,
+        status=True
+    )
+
+    db.add(ad_detail)
+    db.commit()
+
+    return ad
 
 
-# -------------------------------- GET ALL --------------------------------
-
+# ==========================================
+# GET ALL ADS (TABLE DATA)
+# ==========================================
 
 @router.get(
     "/",
-    response_model=list[AdSettingResponse],
     status_code=status.HTTP_200_OK
 )
-def get_ad_settings(
+def get_ads(
     db: Session = Depends(get_db)
 ):
-    ad_settings = db.query(
-        AdSetting
-    ).all()
+    ads = (
+        db.query(
+            AdSetting,
+            AdDetail
+        )
+        .join(
+            AdDetail,
+            AdSetting.id == AdDetail.ad_id
+        )
+        .all()
+    )
 
-    if not ad_settings:
+    if not ads:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No data found"
+            status_code=404,
+            detail="Data not found"
         )
 
-    return ad_settings
+    return [
+        {
+            "id": ad.id,
+            "title": ad.title,
+            "placement": ad.placement,
+            "impressions": detail.impressions,
+            "clicks": detail.clicks,
+            "ctr": float(detail.ctr),
+            "revenue": float(detail.revenue),
+            "status": ad.status
+        }
+        for ad, detail in ads
+    ]
 
 
-# -------------------------------- GET BY ID --------------------------------
-
+# ==========================================
+# GET BY ID
+# ==========================================
 
 @router.get(
-    "/{ad_setting_id}",
-    response_model=AdSettingResponse,
+    "/{ad_id}",
     status_code=status.HTTP_200_OK
 )
-def get_ad_setting(
-    ad_setting_id: int,
+def get_ad_by_id(
+    ad_id: int,
     db: Session = Depends(get_db)
 ):
-    ad_setting = db.query(
-        AdSetting
-    ).filter(
-        AdSetting.id == ad_setting_id
-    ).first()
+    ad_data = (
+        db.query(
+            AdSetting,
+            AdDetail
+        )
+        .join(
+            AdDetail,
+            AdSetting.id == AdDetail.ad_id
+        )
+        .filter(
+            AdSetting.id == ad_id
+        )
+        .first()
+    )
 
-    if not ad_setting:
+    if not ad_data:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad setting not found"
+            status_code=404,
+            detail="Advertisement not found"
         )
 
-    return ad_setting
+    ad, detail = ad_data
+
+    return {
+        "id": ad.id,
+        "title": ad.title,
+        "placement": ad.placement,
+        "impressions": detail.impressions,
+        "clicks": detail.clicks,
+        "ctr": float(detail.ctr),
+        "revenue": float(detail.revenue),
+        "status": ad.status,
+        "created_at": ad.created_at
+    }
 
 
-# -------------------------------- UPDATE --------------------------------
-
-
+# ==========================================
+# UPDATE
+# ==========================================
 @router.put(
-    "/{ad_setting_id}",
-    response_model=AdSettingResponse,
+    "/{ad_id}",
+    response_model=AdResponse,
     status_code=status.HTTP_200_OK
 )
-def update_ad_setting(
-    ad_setting_id: int,
-    data: AdSettingUpdate,
+def update_ad(
+    ad_id: int,
+    data: AdUpdate,
     db: Session = Depends(get_db)
 ):
-    ad_setting = db.query(
+    ad = db.query(
         AdSetting
     ).filter(
-        AdSetting.id == ad_setting_id
+        AdSetting.id == ad_id
     ).first()
 
-    if not ad_setting:
+    if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad setting not found"
+            status_code=404,
+            detail="Advertisement not found"
         )
 
     update_data = data.model_dump(
         exclude_unset=True
     )
 
+    if "placement" in update_data:
+        update_data["placement"] = update_data["placement"].value
+
+    if "status" in update_data:
+        update_data["status"] = update_data["status"].value
+
     for key, value in update_data.items():
-        setattr(
-            ad_setting,
-            key,
-            value
-        )
+        setattr(ad, key, value)
 
     db.commit()
-    db.refresh(ad_setting)
+    db.refresh(ad)
 
-    return ad_setting
+    return ad
 
 
-# -------------------------------- DELETE --------------------------------
-
+# ==========================================
+# DELETE
+# ==========================================
 
 @router.delete(
-    "/{ad_setting_id}",
+    "/{ad_id}",
     status_code=status.HTTP_200_OK
 )
-def delete_ad_setting(
-    ad_setting_id: int,
+def delete_ad(
+    ad_id: int,
     db: Session = Depends(get_db)
 ):
-    ad_setting = db.query(
+    ad = db.query(
         AdSetting
     ).filter(
-        AdSetting.id == ad_setting_id
+        AdSetting.id == ad_id
     ).first()
 
-    if not ad_setting:
+    if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad setting not found"
+            status_code=404,
+            detail="Advertisement not found"
         )
 
-    db.delete(ad_setting)
+    db.delete(ad)
     db.commit()
 
     return {
-        "status": "success",
-        "message": "Ad setting deleted successfully"
+        "message": "Advertisement deleted successfully"
+    }
+
+
+# ==========================================
+# DASHBOARD COUNTS
+# ==========================================
+
+@router.get(
+    "/dashboard/counts",
+    status_code=status.HTTP_200_OK
+)
+def dashboard_counts(
+    db: Session = Depends(get_db)
+):
+    active_ads = db.query(AdSetting).filter(
+        AdSetting.status == "Active"
+    ).count()
+
+    scheduled_ads = db.query(AdSetting).filter(
+        AdSetting.status == "Scheduled"
+    ).count()
+
+    total_revenue = db.query(
+        func.sum(AdDetail.revenue)
+    ).scalar() or 0
+
+    total_clicks = db.query(
+        func.sum(AdDetail.clicks)
+    ).scalar() or 0
+
+    total_impressions = db.query(
+        func.sum(AdDetail.impressions)
+    ).scalar() or 0
+
+    return {
+        "active_ads": active_ads,
+        "scheduled_ads": scheduled_ads,
+        "revenue": float(total_revenue),
+        "total_clicks": total_clicks,
+        "impressions": total_impressions
     }
