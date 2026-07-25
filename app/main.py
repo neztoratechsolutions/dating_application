@@ -23,6 +23,8 @@ from models.cms_models import CreatorAgreement
 from models.cms_models import SafetyPolicy
 from models.cms_models import AboutUs
 from models.cms_models import FAQ
+from models.cms_settings import SEOSetting
+from models.support_center import SupportTicket
 
 
 from routes.state import router as state_router
@@ -45,6 +47,8 @@ from routes.creator_agreement import router as creator_agreement_router
 from routes.safety_policy import router as safety_policy_router
 from routes.about_us import router as about_us_router
 from routes.faq import router as faq_router
+from routes.seo_settings import router as seo_settings_router
+from routes.support_ticket import router as support_ticket_router
 
 
 # Create FastAPI app first
@@ -92,3 +96,5 @@ app.include_router(creator_agreement_router)
 app.include_router(safety_policy_router)
 app.include_router(about_us_router)
 app.include_router(faq_router)
+app.include_router(seo_settings_router)
+app.include_router(support_ticket_router)
