@@ -25,6 +25,7 @@ from models.cms_models import AboutUs
 from models.cms_models import FAQ
 from models.cms_settings import SEOSetting
 from models.support_center import SupportTicket
+from models.app_setting import AppSetting
 
 
 
@@ -50,6 +51,8 @@ from routes.about_us import router as about_us_router
 from routes.faq import router as faq_router
 from routes.seo_settings import router as seo_settings_router
 from routes.support_ticket import router as support_ticket_router
+from routes.app_setting import router as app_setting_router
+
 
 
 # Create FastAPI app first
@@ -99,3 +102,4 @@ app.include_router(about_us_router)
 app.include_router(faq_router)
 app.include_router(seo_settings_router)
 app.include_router(support_ticket_router)
+app.include_router(app_setting_router)
