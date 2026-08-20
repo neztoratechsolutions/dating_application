@@ -5,8 +5,6 @@ from fastapi.staticfiles import StaticFiles
 
 from database import engine, Base
 
-from models.state import State
-from models.gift_master import GiftMaster
 from models.users import User
 from models.pricing_details import PricingDetail
 from models.user_status import UserStatus
@@ -26,11 +24,13 @@ from models.cms_models import FAQ
 from models.cms_settings import SEOSetting
 from models.support_center import SupportTicket
 from models.app_setting import AppSetting
+from models.state import State
+from models.gift_master import GiftMaster
+from models.voice_call import VoiceCall
 
 
 
-from routes.state import router as state_router
-from routes.gift_master import router as gift_router
+
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
 from routes.auth import router as auth_router
@@ -52,6 +52,9 @@ from routes.faq import router as faq_router
 from routes.seo_settings import router as seo_settings_router
 from routes.support_ticket import router as support_ticket_router
 from routes.app_setting import router as app_setting_router
+from routes.state import router as state_router
+from routes.gift_master import router as gift_router
+from routes.voice_call import router as voice_call_router
 
 
 
@@ -80,8 +83,7 @@ Base.metadata.create_all(bind=engine)
 
 
 # Include routes
-app.include_router(state_router)
-app.include_router(gift_router)
+
 app.include_router(user_router)
 app.include_router(pricing_router)
 app.include_router(auth_router)
@@ -103,3 +105,6 @@ app.include_router(faq_router)
 app.include_router(seo_settings_router)
 app.include_router(support_ticket_router)
 app.include_router(app_setting_router)
+app.include_router(state_router)
+app.include_router(gift_router)
+app.include_router(voice_call_router)
