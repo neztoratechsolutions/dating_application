@@ -60,7 +60,7 @@ from routes.voice_call import router as voice_call_router
 from routes.chat import router as chat_router
 from routes.chatmessage import router as chatmessage_router
 from routes.video_call import router as video_call_router
-
+from routes.customer import router as customer_router
 
 
 # Create FastAPI app first
@@ -116,3 +116,4 @@ app.include_router(voice_call_router)
 app.include_router(chat_router)
 app.include_router(chatmessage_router)
 app.include_router(video_call_router)
+app.include_router(customer_router)
