@@ -29,6 +29,7 @@ from models.gift_master import GiftMaster
 from models.voice_call import VoiceCall
 from models.chat_history import (Chat,ChatMessage,ChatCallLog,ChatReaction,ChatDeleteHistory,)
 from models.chat_report import(ChatReport,ChatModerationAction)
+from models.video_call import VideoCall
 
 
 
@@ -58,6 +59,7 @@ from routes.gift_master import router as gift_router
 from routes.voice_call import router as voice_call_router
 from routes.chat import router as chat_router
 from routes.chatmessage import router as chatmessage_router
+from routes.video_call import router as video_call_router
 
 
 
@@ -113,3 +115,4 @@ app.include_router(gift_router)
 app.include_router(voice_call_router)
 app.include_router(chat_router)
 app.include_router(chatmessage_router)
+app.include_router(video_call_router)
