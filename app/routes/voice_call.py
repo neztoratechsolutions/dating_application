@@ -1,15 +1,23 @@
-from datetime import datetime, timedelta, time
+# ==========================================================
+# VOICE CALL ROUTES
+# ==========================================================
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, aliased
+import uuid
+from datetime import datetime, date, timezone
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_, func
+from sqlalchemy.orm import Session
 
 from database import get_db
-from models.voice_call import VoiceCall
-from models.state import State
+
 from models.users import User
+from models.voice_call import VoiceCall
+from models.user_status import UserStatus
 
 from schemas.voice_call import (
+    VoiceCallInitiate,
     VoiceCallCreate,
     VoiceCallUpdate,
     VoiceCallResponse
@@ -23,226 +31,686 @@ router = APIRouter(
 
 
 # ==========================================================
-# CREATE VOICE CALL
+# GENERATE CALL ID
 # ==========================================================
 
-@router.post("/", response_model=VoiceCallResponse)
-def create_voice_call(
-    data: VoiceCallCreate,
+def generate_call_id():
+
+    return "CALL-" + uuid.uuid4().hex[:12].upper()
+
+
+# ==========================================================
+# INITIATE VOICE CALL
+# ==========================================================
+
+@router.post(
+    "/initiate",
+    response_model=VoiceCallResponse,
+    status_code=200
+)
+def initiate_voice_call(
+    data: VoiceCallInitiate,
     db: Session = Depends(get_db)
 ):
+
+    # ------------------------------------------------------
+    # CHECK SAME USER
+    # ------------------------------------------------------
+
+    if data.caller_id == data.receiver_id:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Caller and receiver cannot be the same"
+        )
+
+    # ------------------------------------------------------
+    # GET CALLER
+    # ------------------------------------------------------
+
+    caller = (
+        db.query(User)
+        .filter(
+            User.id == data.caller_id
+        )
+        .first()
+    )
+
+    if not caller:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Caller not found"
+        )
+
+    # ------------------------------------------------------
+    # GET RECEIVER
+    # ------------------------------------------------------
+
+    receiver = (
+        db.query(User)
+        .filter(
+            User.id == data.receiver_id
+        )
+        .first()
+    )
+
+    if not receiver:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Receiver not found"
+        )
+
+    # ------------------------------------------------------
+    # CUSTOMER / CREATOR CHECK
+    # ------------------------------------------------------
+
+    if caller.role == "customer" and receiver.role == "creator":
+
+        customer_id = caller.id
+        creator_id = receiver.id
+
+    elif caller.role == "creator" and receiver.role == "customer":
+
+        customer_id = receiver.id
+        creator_id = caller.id
+
+    else:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only customer and creator can make voice calls"
+        )
+
+    # ------------------------------------------------------
+    # CHECK ACTIVE CALL
+    # ------------------------------------------------------
 
     existing_call = (
         db.query(VoiceCall)
         .filter(
-            VoiceCall.call_id == data.call_id
+            or_(
+                VoiceCall.caller_id == data.caller_id,
+                VoiceCall.receiver_id == data.caller_id,
+                VoiceCall.caller_id == data.receiver_id,
+                VoiceCall.receiver_id == data.receiver_id
+            ),
+            VoiceCall.status.in_(
+                ["ringing", "ongoing"]
+            )
         )
         .first()
     )
 
     if existing_call:
+
         raise HTTPException(
             status_code=400,
-            detail="Call ID already exists"
+            detail="User is already in another call"
         )
 
-    customer = (
-        db.query(User)
+    # ------------------------------------------------------
+    # CHECK USER STATUS
+    #
+    # ONLINE / OFFLINE DOES NOT BLOCK CALL
+    # ------------------------------------------------------
+
+    caller_status = (
+        db.query(UserStatus)
         .filter(
-            User.id == data.customer_id
+            UserStatus.user_id == data.caller_id
         )
         .first()
     )
 
-    if not customer:
-        raise HTTPException(
-            status_code=404,
-            detail="Customer not found"
-        )
-
-    creator = (
-        db.query(User)
+    receiver_status = (
+        db.query(UserStatus)
         .filter(
-            User.id == data.creator_id
+            UserStatus.user_id == data.receiver_id
         )
         .first()
     )
 
-    if not creator:
-        raise HTTPException(
-            status_code=404,
-            detail="Creator not found"
-        )
+    # Status is only read.
+    # Offline users can still receive a call record.
+
+    caller_online = (
+        caller_status.is_online
+        if caller_status
+        else False
+    )
+
+    receiver_online = (
+        receiver_status.is_online
+        if receiver_status
+        else False
+    )
+
+    # ------------------------------------------------------
+    # GENERATE CALL ID AUTOMATICALLY
+    # ------------------------------------------------------
+
+    call_id = generate_call_id()
+
+    # ------------------------------------------------------
+    # CREATE CALL
+    # ------------------------------------------------------
 
     voice_call = VoiceCall(
-        call_id=data.call_id,
-        customer_id=data.customer_id,
-        creator_id=data.creator_id,
-        start_time=data.start_time,
-        end_time=data.end_time,
-        duration=data.duration,
-        coins=data.coins,
-        revenue=data.revenue,
-        status=data.status
+
+        call_id=call_id,
+
+        customer_id=customer_id,
+        creator_id=creator_id,
+
+        caller_id=data.caller_id,
+        receiver_id=data.receiver_id,
+
+        start_time=None,
+        end_time=None,
+
+        duration=0,
+        coins=0,
+        revenue=Decimal("0.00"),
+
+        status="ringing"
     )
 
     db.add(voice_call)
+
     db.commit()
+
     db.refresh(voice_call)
 
     return voice_call
 
 
 # ==========================================================
-# GET ALL VOICE CALLS + FILTER
+# CREATE VOICE CALL
 # ==========================================================
 
-@router.get(
+@router.post(
     "/",
-    response_model=list[VoiceCallResponse]
+    response_model=VoiceCallResponse,
+    status_code=200
 )
-def get_all_voice_calls(
-    date_filter: str = Query(
-        "all",
-        description="today, last_7_days, last_30_days, all"
-    ),
-
-    state_id: int | None = Query(
-        None,
-        description="Filter by state ID"
-    ),
-
-    creator_id: int | None = Query(
-        None,
-        description="Filter by creator ID"
-    ),
-
-    status: str | None = Query(
-        None,
-        description="completed, missed, cancelled, ongoing"
-    ),
-
+def create_voice_call(
+    data: VoiceCallCreate,
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # User Aliases
-    # --------------------------------
+    # ------------------------------------------------------
+    # CHECK SAME USER
+    # ------------------------------------------------------
 
-    Customer = aliased(User)
-    Creator = aliased(User)
+    if data.caller_id == data.receiver_id:
 
-    # --------------------------------
-    # Base Query
-    # --------------------------------
-
-    query = (
-        db.query(VoiceCall)
-        .join(
-            Customer,
-            VoiceCall.customer_id == Customer.id
+        raise HTTPException(
+            status_code=400,
+            detail="Caller and receiver cannot be the same"
         )
-        .join(
-            Creator,
-            VoiceCall.creator_id == Creator.id
+
+    # ------------------------------------------------------
+    # CHECK CUSTOMER
+    # ------------------------------------------------------
+
+    customer = (
+        db.query(User)
+        .filter(
+            User.id == data.customer_id,
+            User.role == "customer"
         )
+        .first()
     )
 
-    # --------------------------------
-    # DATE FILTER
-    # --------------------------------
+    if not customer:
 
-    today = datetime.now().date()
-
-    if date_filter == "today":
-
-        start_datetime = datetime.combine(
-            today,
-            time.min
+        raise HTTPException(
+            status_code=404,
+            detail="Customer not found"
         )
 
-        query = query.filter(
-            VoiceCall.start_time >= start_datetime
+    # ------------------------------------------------------
+    # CHECK CREATOR
+    # ------------------------------------------------------
+
+    creator = (
+        db.query(User)
+        .filter(
+            User.id == data.creator_id,
+            User.role == "creator"
+        )
+        .first()
+    )
+
+    if not creator:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Creator not found"
         )
 
-    elif date_filter == "last_7_days":
+    # ------------------------------------------------------
+    # CHECK CALLER
+    # ------------------------------------------------------
 
-        start_date = today - timedelta(days=6)
+    caller = (
+        db.query(User)
+        .filter(
+            User.id == data.caller_id
+        )
+        .first()
+    )
 
-        start_datetime = datetime.combine(
-            start_date,
-            time.min
+    if not caller:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Caller not found"
         )
 
-        query = query.filter(
-            VoiceCall.start_time >= start_datetime
+    # ------------------------------------------------------
+    # CHECK RECEIVER
+    # ------------------------------------------------------
+
+    receiver = (
+        db.query(User)
+        .filter(
+            User.id == data.receiver_id
+        )
+        .first()
+    )
+
+    if not receiver:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Receiver not found"
         )
 
-    elif date_filter == "last_30_days":
+    # ------------------------------------------------------
+    # VALIDATE CUSTOMER / CREATOR
+    # ------------------------------------------------------
 
-        start_date = today - timedelta(days=29)
+    if caller.role == "customer" and receiver.role == "creator":
 
-        start_datetime = datetime.combine(
-            start_date,
-            time.min
-        )
+        if (
+            caller.id != customer.id
+            or receiver.id != creator.id
+        ):
 
-        query = query.filter(
-            VoiceCall.start_time >= start_datetime
-        )
+            raise HTTPException(
+                status_code=400,
+                detail="Customer and creator do not match caller and receiver"
+            )
 
-    elif date_filter == "all":
+    elif caller.role == "creator" and receiver.role == "customer":
 
-        pass
+        if (
+            receiver.id != customer.id
+            or caller.id != creator.id
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail="Customer and creator do not match caller and receiver"
+            )
 
     else:
 
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid date_filter. "
-                "Use today, last_7_days, "
-                "last_30_days or all"
-            )
+            detail="Only customer and creator can make voice calls"
         )
 
-    # --------------------------------
-    # STATE FILTER
-    # Customer OR Creator State
-    # --------------------------------
+    # ------------------------------------------------------
+    # CHECK ACTIVE CALL
+    # ------------------------------------------------------
 
-    if state_id is not None:
+    existing_call = (
+        db.query(VoiceCall)
+        .filter(
+            or_(
+                VoiceCall.caller_id == data.caller_id,
+                VoiceCall.receiver_id == data.caller_id,
+                VoiceCall.caller_id == data.receiver_id,
+                VoiceCall.receiver_id == data.receiver_id
+            ),
+            VoiceCall.status.in_(
+                ["ringing", "ongoing"]
+            )
+        )
+        .first()
+    )
+
+    if existing_call:
+
+        raise HTTPException(
+            status_code=400,
+            detail="User is already in another call"
+        )
+
+    # ------------------------------------------------------
+    # GENERATE CALL ID AUTOMATICALLY
+    # ------------------------------------------------------
+
+    call_id = generate_call_id()
+
+    # ------------------------------------------------------
+    # CREATE CALL
+    # ------------------------------------------------------
+
+    voice_call = VoiceCall(
+
+        call_id=call_id,
+
+        customer_id=data.customer_id,
+        creator_id=data.creator_id,
+
+        caller_id=data.caller_id,
+        receiver_id=data.receiver_id,
+
+        start_time=None,
+        end_time=None,
+
+        duration=0,
+        coins=0,
+        revenue=Decimal("0.00"),
+
+        status="ringing"
+    )
+
+    db.add(voice_call)
+
+    db.commit()
+
+    db.refresh(voice_call)
+
+    return voice_call
+
+
+# ==========================================================
+# ACCEPT VOICE CALL
+# ==========================================================
+
+@router.post(
+    "/{call_id}/accept",
+    response_model=VoiceCallResponse,
+    status_code=200
+)
+def accept_voice_call(
+    call_id: str,
+    db: Session = Depends(get_db)
+):
+
+    voice_call = (
+        db.query(VoiceCall)
+        .filter(
+            VoiceCall.call_id == call_id
+        )
+        .first()
+    )
+
+    if not voice_call:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Call not found"
+        )
+
+    # ------------------------------------------------------
+    # CHECK STATUS
+    # ------------------------------------------------------
+
+    if voice_call.status != "ringing":
+
+        raise HTTPException(
+            status_code=400,
+            detail="Call cannot be accepted"
+        )
+
+    # ------------------------------------------------------
+    # ACCEPT CALL
+    # ------------------------------------------------------
+
+    voice_call.status = "ongoing"
+
+    # IMPORTANT:
+    # Use timezone-aware datetime
+
+    voice_call.start_time = datetime.now(
+        timezone.utc
+    )
+
+    db.commit()
+
+    db.refresh(voice_call)
+
+    return voice_call
+
+
+# ==========================================================
+# REJECT VOICE CALL
+# ==========================================================
+
+@router.post(
+    "/{call_id}/reject",
+    response_model=VoiceCallResponse,
+    status_code=200
+)
+def reject_voice_call(
+    call_id: str,
+    db: Session = Depends(get_db)
+):
+
+    voice_call = (
+        db.query(VoiceCall)
+        .filter(
+            VoiceCall.call_id == call_id
+        )
+        .first()
+    )
+
+    if not voice_call:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Call not found"
+        )
+
+    # ------------------------------------------------------
+    # CHECK STATUS
+    # ------------------------------------------------------
+
+    if voice_call.status != "ringing":
+
+        raise HTTPException(
+            status_code=400,
+            detail="Call cannot be rejected"
+        )
+
+    # ------------------------------------------------------
+    # REJECT CALL
+    # ------------------------------------------------------
+
+    voice_call.status = "rejected"
+
+    voice_call.end_time = datetime.now(
+        timezone.utc
+    )
+
+    db.commit()
+
+    db.refresh(voice_call)
+
+    return voice_call
+
+
+# ==========================================================
+# END VOICE CALL
+# ==========================================================
+
+@router.post(
+    "/{call_id}/end",
+    response_model=VoiceCallResponse,
+    status_code=200
+)
+def end_voice_call(
+    call_id: str,
+    db: Session = Depends(get_db)
+):
+
+    voice_call = (
+        db.query(VoiceCall)
+        .filter(
+            VoiceCall.call_id == call_id
+        )
+        .first()
+    )
+
+    if not voice_call:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Call not found"
+        )
+
+    # ------------------------------------------------------
+    # CHECK STATUS
+    # ------------------------------------------------------
+
+    if voice_call.status != "ongoing":
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only ongoing calls can be ended"
+        )
+
+    # ------------------------------------------------------
+    # END TIME
+    # ------------------------------------------------------
+
+    end_time = datetime.now(
+        timezone.utc
+    )
+
+    voice_call.end_time = end_time
+
+    # ------------------------------------------------------
+    # CALCULATE DURATION
+    # ------------------------------------------------------
+
+    if voice_call.start_time:
+
+        start_time = voice_call.start_time
+
+        # If DB returns naive datetime,
+        # convert it to UTC-aware datetime
+
+        if start_time.tzinfo is None:
+
+            start_time = start_time.replace(
+                tzinfo=timezone.utc
+            )
+
+        duration = (
+            end_time - start_time
+        ).total_seconds()
+
+        voice_call.duration = max(
+            0,
+            int(duration)
+        )
+
+    else:
+
+        voice_call.duration = 0
+
+    # ------------------------------------------------------
+    # STATUS
+    # ------------------------------------------------------
+
+    voice_call.status = "completed"
+
+    db.commit()
+
+    db.refresh(voice_call)
+
+    return voice_call
+
+
+# ==========================================================
+# GET ALL VOICE CALLS
+# ==========================================================
+
+@router.get(
+    "/",
+    response_model=list[VoiceCallResponse],
+    status_code=200
+)
+def get_all_voice_calls(
+    call_date: date | None = None,
+    state_id: int | None = None,
+    creator_id: int | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db)
+):
+
+    query = db.query(VoiceCall)
+
+    # ------------------------------------------------------
+    # DATE FILTER
+    # ------------------------------------------------------
+
+    if call_date:
 
         query = query.filter(
-            or_(
-                Customer.state_id == state_id,
-                Creator.state_id == state_id
-            )
+            func.date(
+                VoiceCall.created_at
+            ) == call_date
         )
 
-    # --------------------------------
+    # ------------------------------------------------------
     # CREATOR FILTER
-    # --------------------------------
+    # ------------------------------------------------------
 
-    if creator_id is not None:
+    if creator_id:
 
         query = query.filter(
             VoiceCall.creator_id == creator_id
         )
 
-    # --------------------------------
+    # ------------------------------------------------------
     # STATUS FILTER
-    # --------------------------------
+    # ------------------------------------------------------
 
-    if status is not None:
+    if status:
 
         query = query.filter(
             VoiceCall.status == status
         )
 
-    # --------------------------------
-    # ORDER
-    # --------------------------------
+    # ------------------------------------------------------
+    # STATE FILTER
+    # ------------------------------------------------------
+
+    if state_id:
+
+        query = (
+            query
+            .join(
+                User,
+                User.id == VoiceCall.creator_id
+            )
+            .filter(
+                User.state_id == state_id
+            )
+        )
+
+    # ------------------------------------------------------
+    # GET CALLS
+    # ------------------------------------------------------
 
     calls = (
         query
@@ -260,42 +728,16 @@ def get_all_voice_calls(
 # ==========================================================
 
 @router.get(
-    "/{id}",
-    response_model=VoiceCallResponse
+    "/{call_id}",
+    response_model=VoiceCallResponse,
+    status_code=200
 )
 def get_voice_call(
-    id: int,
-    db: Session = Depends(get_db)
-):
-
-    call = (
-        db.query(VoiceCall)
-        .filter(
-            VoiceCall.id == id
-        )
-        .first()
-    )
-
-    if not call:
-        raise HTTPException(
-            status_code=404,
-            detail="Voice call not found"
-        )
-
-    return call
-
-
-# ==========================================================
-# DELETE VOICE CALL
-# ==========================================================
-
-@router.delete("/{call_id}")
-def delete_voice_call(
     call_id: str,
     db: Session = Depends(get_db)
 ):
 
-    call = (
+    voice_call = (
         db.query(VoiceCall)
         .filter(
             VoiceCall.call_id == call_id
@@ -303,13 +745,46 @@ def delete_voice_call(
         .first()
     )
 
-    if not call:
+    if not voice_call:
+
         raise HTTPException(
             status_code=404,
-            detail="Voice call not found"
+            detail="Call not found"
         )
 
-    db.delete(call)
+    return voice_call
+
+
+# ==========================================================
+# DELETE VOICE CALL
+# ==========================================================
+
+@router.delete(
+    "/{call_id}",
+    status_code=200
+)
+def delete_voice_call(
+    call_id: str,
+    db: Session = Depends(get_db)
+):
+
+    voice_call = (
+        db.query(VoiceCall)
+        .filter(
+            VoiceCall.call_id == call_id
+        )
+        .first()
+    )
+
+    if not voice_call:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Call not found"
+        )
+
+    db.delete(voice_call)
+
     db.commit()
 
     return {
@@ -317,397 +792,243 @@ def delete_voice_call(
     }
 
 
-# ==========================================================
-# DASHBOARD SUMMARY
-# ==========================================================
-
-@router.get("/dashboard/summary")
-def get_voice_call_dashboard_summary(
-    db: Session = Depends(get_db)
-):
-
-    # Today's start time
-
-    today_start = datetime.combine(
-        datetime.now().date(),
-        time.min
-    )
-
-    # --------------------------------
-    # Total Calls Today
-    # --------------------------------
-
-    total_calls_today = (
-        db.query(
-            func.count(VoiceCall.id)
-        )
-        .filter(
-            VoiceCall.start_time >= today_start
-        )
-        .scalar()
-    )
-
-    # --------------------------------
-    # Active Now
-    # --------------------------------
-
-    active_now = (
-        db.query(
-            func.count(VoiceCall.id)
-        )
-        .filter(
-            VoiceCall.status == "ongoing"
-        )
-        .scalar()
-    )
-
-    # --------------------------------
-    # Total Minutes
-    # --------------------------------
-
-    total_seconds = (
-        db.query(
-            func.coalesce(
-                func.sum(VoiceCall.duration),
-                0
-            )
-        )
-        .filter(
-            VoiceCall.start_time >= today_start
-        )
-        .scalar()
-    )
-
-    total_minutes = round(
-        float(total_seconds) / 60,
-        2
-    )
-
-    # --------------------------------
-    # Average Duration
-    # --------------------------------
-
-    avg_duration_seconds = (
-        db.query(
-            func.coalesce(
-                func.avg(VoiceCall.duration),
-                0
-            )
-        )
-        .filter(
-            VoiceCall.start_time >= today_start
-        )
-        .scalar()
-    )
-
-    avg_duration_seconds = round(
-        float(avg_duration_seconds),
-        2
-    )
-
-    avg_minutes = int(
-        avg_duration_seconds // 60
-    )
-
-    avg_seconds = int(
-        avg_duration_seconds % 60
-    )
-
-    avg_duration = (
-        f"{avg_minutes}m {avg_seconds}s"
-    )
-
-    # --------------------------------
-    # Revenue
-    # --------------------------------
-
-    revenue = (
-        db.query(
-            func.coalesce(
-                func.sum(VoiceCall.revenue),
-                0
-            )
-        )
-        .filter(
-            VoiceCall.start_time >= today_start
-        )
-        .scalar()
-    )
-
-    # --------------------------------
-    # Failed Calls
-    # --------------------------------
-
-    failed_calls = (
-        db.query(
-            func.count(VoiceCall.id)
-        )
-        .filter(
-            VoiceCall.start_time >= today_start,
-            VoiceCall.status.in_([
-                "missed",
-                "cancelled",
-                "failed"
-            ])
-        )
-        .scalar()
-    )
-
-    return {
-        "total_calls_today": total_calls_today,
-        "active_now": active_now,
-        "total_minutes": total_minutes,
-        "avg_duration": avg_duration,
-        "revenue": float(revenue),
-        "failed_calls": failed_calls
-    }
-
-
-# ==========================================================
-# DAILY CALL VOLUME
-# ==========================================================
-
-@router.get("/dashboard/daily-call-volume")
-def get_daily_call_volume(
-    db: Session = Depends(get_db)
-):
-
-    today = datetime.now().date()
-
-    start_date = today - timedelta(days=6)
-
-    start_datetime = datetime.combine(
-        start_date,
-        time.min
-    )
-
-    result = (
-        db.query(
-            func.date(
-                VoiceCall.start_time
-            ).label("call_date"),
-
-            func.count(
-                VoiceCall.id
-            ).label("total_calls")
-        )
-        .filter(
-            VoiceCall.start_time >= start_datetime
-        )
-        .group_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .order_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .all()
-    )
-
-    call_data = {
-        row.call_date: row.total_calls
-        for row in result
-    }
-
-    response = []
-
-    for i in range(7):
-
-        current_date = (
-            start_date +
-            timedelta(days=i)
-        )
-
-        response.append({
-            "date": current_date.strftime(
-                "%Y-%m-%d"
-            ),
-
-            "day": current_date.strftime(
-                "%a"
-            ),
-
-            "calls": call_data.get(
-                current_date,
-                0
-            )
-        })
-
-    return {
-        "data": response
-    }
-
-
-# ==========================================================
-# REVENUE BY CALLS
-# ==========================================================
-
-@router.get("/dashboard/revenue-by-calls")
-def get_revenue_by_calls(
-    db: Session = Depends(get_db)
-):
-
-    today = datetime.now().date()
-
-    start_date = today - timedelta(days=6)
-
-    start_datetime = datetime.combine(
-        start_date,
-        time.min
-    )
-
-    result = (
-        db.query(
-            func.date(
-                VoiceCall.start_time
-            ).label("call_date"),
-
-            func.coalesce(
-                func.sum(
-                    VoiceCall.revenue
-                ),
-                0
-            ).label("total_revenue")
-        )
-        .filter(
-            VoiceCall.start_time >= start_datetime,
-            VoiceCall.status.in_([
-                "completed",
-                "ongoing"
-            ])
-        )
-        .group_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .order_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .all()
-    )
-
-    revenue_data = {
-        row.call_date: float(
-            row.total_revenue
-        )
-        for row in result
-    }
-
-    response = []
-
-    for i in range(7):
-
-        current_date = (
-            start_date +
-            timedelta(days=i)
-        )
-
-        response.append({
-            "date": current_date.strftime(
-                "%Y-%m-%d"
-            ),
-
-            "day": current_date.strftime(
-                "%a"
-            ),
-
-            "revenue": revenue_data.get(
-                current_date,
-                0
-            )
-        })
-
-    return {
-        "data": response
-    }
-
-
-# ==========================================================
-# AVERAGE DURATION TREND
-# ==========================================================
-
-@router.get("/dashboard/avg-duration-trend")
-def get_avg_duration_trend(
-    db: Session = Depends(get_db)
-):
-
-    today = datetime.now().date()
-
-    start_date = today - timedelta(days=6)
-
-    start_datetime = datetime.combine(
-        start_date,
-        time.min
-    )
-
-    result = (
-        db.query(
-            func.date(
-                VoiceCall.start_time
-            ).label("call_date"),
-
-            func.avg(
-                VoiceCall.duration
-            ).label("avg_duration")
-        )
-        .filter(
-            VoiceCall.start_time >= start_datetime,
-            VoiceCall.status.in_([
-                "completed",
-                "ongoing"
-            ])
-        )
-        .group_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .order_by(
-            func.date(
-                VoiceCall.start_time
-            )
-        )
-        .all()
-    )
-
-    duration_data = {
-        row.call_date: round(
-            float(row.avg_duration),
-            2
-        )
-        for row in result
-    }
-
-    response = []
-
-    for i in range(7):
-
-        current_date = (
-            start_date +
-            timedelta(days=i)
-        )
-
-        response.append({
-            "date": current_date.strftime(
-                "%Y-%m-%d"
-            ),
-
-            "day": current_date.strftime(
-                "%a"
-            ),
-
-            "avg_duration": duration_data.get(
-                current_date,
-                0
-            )
-        })
-
-    return {
-        "data": response
-    }
+# # ==========================================================
+# # DASHBOARD - VOICE CALL SUMMARY
+# # ==========================================================
+
+# @router.get(
+#     "/dashboard/summary"
+# )
+# def voice_call_summary(
+#     db: Session = Depends(get_db)
+# ):
+
+#     total_calls = (
+#         db.query(
+#             func.count(VoiceCall.id)
+#         )
+#         .scalar()
+#     )
+
+#     completed_calls = (
+#         db.query(
+#             func.count(VoiceCall.id)
+#         )
+#         .filter(
+#             VoiceCall.status == "completed"
+#         )
+#         .scalar()
+#     )
+
+#     ongoing_calls = (
+#         db.query(
+#             func.count(VoiceCall.id)
+#         )
+#         .filter(
+#             VoiceCall.status == "ongoing"
+#         )
+#         .scalar()
+#     )
+
+#     ringing_calls = (
+#         db.query(
+#             func.count(VoiceCall.id)
+#         )
+#         .filter(
+#             VoiceCall.status == "ringing"
+#         )
+#         .scalar()
+#     )
+
+#     rejected_calls = (
+#         db.query(
+#             func.count(VoiceCall.id)
+#         )
+#         .filter(
+#             VoiceCall.status == "rejected"
+#         )
+#         .scalar()
+#     )
+
+#     total_revenue = (
+#         db.query(
+#             func.coalesce(
+#                 func.sum(
+#                     VoiceCall.revenue
+#                 ),
+#                 0
+#             )
+#         )
+#         .scalar()
+#     )
+
+#     total_duration = (
+#         db.query(
+#             func.coalesce(
+#                 func.sum(
+#                     VoiceCall.duration
+#                 ),
+#                 0
+#             )
+#         )
+#         .scalar()
+#     )
+
+#     return {
+#         "total_calls": total_calls or 0,
+#         "completed_calls": completed_calls or 0,
+#         "ongoing_calls": ongoing_calls or 0,
+#         "ringing_calls": ringing_calls or 0,
+#         "rejected_calls": rejected_calls or 0,
+#         "total_revenue": str(
+#             total_revenue or 0
+#         ),
+#         "total_duration": total_duration or 0
+#     }
+
+
+# # ==========================================================
+# # DAILY CALL VOLUME
+# # ==========================================================
+
+# @router.get(
+#     "/dashboard/daily-call-volume"
+# )
+# def daily_call_volume(
+#     db: Session = Depends(get_db)
+# ):
+
+#     result = (
+#         db.query(
+#             func.date(
+#                 VoiceCall.created_at
+#             ).label("date"),
+
+#             func.count(
+#                 VoiceCall.id
+#             ).label("call_count")
+#         )
+#         .group_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .order_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .all()
+#     )
+
+#     return [
+#         {
+#             "date": row.date,
+#             "call_count": row.call_count
+#         }
+#         for row in result
+#     ]
+
+
+# # ==========================================================
+# # REVENUE BY CALLS
+# # ==========================================================
+
+# @router.get(
+#     "/dashboard/revenue-by-calls"
+# )
+# def revenue_by_calls(
+#     db: Session = Depends(get_db)
+# ):
+
+#     result = (
+#         db.query(
+#             func.date(
+#                 VoiceCall.created_at
+#             ).label("date"),
+
+#             func.count(
+#                 VoiceCall.id
+#             ).label("call_count"),
+
+#             func.coalesce(
+#                 func.sum(
+#                     VoiceCall.revenue
+#                 ),
+#                 0
+#             ).label("revenue")
+#         )
+#         .group_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .order_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .all()
+#     )
+
+#     return [
+#         {
+#             "date": row.date,
+#             "call_count": row.call_count,
+#             "revenue": str(
+#                 row.revenue
+#             )
+#         }
+#         for row in result
+#     ]
+
+
+# # ==========================================================
+# # AVERAGE CALL DURATION
+# # ==========================================================
+
+# @router.get(
+#     "/dashboard/average-duration"
+# )
+# def average_call_duration(
+#     db: Session = Depends(get_db)
+# ):
+
+#     result = (
+#         db.query(
+#             func.date(
+#                 VoiceCall.created_at
+#             ).label("date"),
+
+#             func.avg(
+#                 VoiceCall.duration
+#             ).label("average_duration")
+#         )
+#         .filter(
+#             VoiceCall.status == "completed"
+#         )
+#         .group_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .order_by(
+#             func.date(
+#                 VoiceCall.created_at
+#             )
+#         )
+#         .all()
+#     )
+
+#     return [
+#         {
+#             "date": row.date,
+#             "average_duration": round(
+#                 float(
+#                     row.average_duration or 0
+#                 ),
+#                 2
+#             )
+#         }
+#         for row in result
+#     ]
