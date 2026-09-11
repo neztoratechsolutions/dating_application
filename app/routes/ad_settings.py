@@ -7,6 +7,7 @@ from models.ad_setting import AdSetting
 from models.ad_details import AdDetail
 
 from schemas.ad_settings import (AdCreate,AdUpdate,AdResponse)
+from datetime import datetime
 
 router = APIRouter(prefix="/ad_settings",tags=["ad_settings"])
 
@@ -56,6 +57,9 @@ def create_ad(
 # GET ALL ADS (TABLE DATA)
 # ==========================================
 
+# ==========================================
+# GET ALL ADS (TABLE DATA)
+# ==========================================
 @router.get(
     "/",
     status_code=status.HTTP_200_OK
@@ -85,7 +89,11 @@ def get_ads(
         {
             "id": ad.id,
             "title": ad.title,
+            "banner_url": ad.banner_url,  # <--- ADD THIS
+            "redirect_url": ad.redirect_url, # <--- ADD THIS
             "placement": ad.placement,
+            "start_date": ad.start_date,  # <--- ADD THIS
+            "end_date": ad.end_date,      # <--- ADD THIS
             "impressions": detail.impressions,
             "clicks": detail.clicks,
             "ctr": float(detail.ctr),
@@ -94,7 +102,6 @@ def get_ads(
         }
         for ad, detail in ads
     ]
-
 
 # ==========================================
 # GET BY ID
@@ -258,3 +265,26 @@ def dashboard_counts(
         "total_clicks": total_clicks,
         "impressions": total_impressions
     }
+
+import os
+from fastapi import UploadFile, File
+
+# Ensure uploads directory exists
+os.makedirs("uploads", exist_ok=True)
+
+@router.post(
+    "/upload",
+    status_code=status.HTTP_200_OK
+)
+def upload_ad_image(file: UploadFile = File(...)):
+    # Generate a safe filename
+    file_ext = file.filename.split(".")[-1]
+    save_name = f"ad_{datetime.now().strftime('%Y%m%d%H%M%S')}.{file_ext}"
+    file_location = f"uploads/{save_name}"
+    
+    # Save the file to disk
+    with open(file_location, "wb+") as file_object:
+        file_object.write(file.file.read())
+    
+    # Return the path to be saved in the DB
+    return {"url": file_location}    
