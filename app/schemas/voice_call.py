@@ -5,10 +5,24 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
+# ==========================================================
+# VOICE CALL INITIATE
+# ==========================================================
+
+class VoiceCallInitiate(BaseModel):
+    caller_id: int
+    receiver_id: int
+
+
+# ==========================================================
+# CREATE VOICE CALL
+# ==========================================================
+
 class VoiceCallCreate(BaseModel):
-    call_id: str
     customer_id: int
     creator_id: int
+    caller_id: int
+    receiver_id: int
 
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -17,26 +31,32 @@ class VoiceCallCreate(BaseModel):
     coins: int = 0
     revenue: Decimal = Decimal("0.00")
 
-    status: str = "ongoing"
+    status: str = "ringing"
 
+
+# ==========================================================
+# UPDATE VOICE CALL
+# ==========================================================
 
 class VoiceCallUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-
     duration: Optional[int] = None
     coins: Optional[int] = None
     revenue: Optional[Decimal] = None
-
     status: Optional[str] = None
 
+
+# ==========================================================
 
 class VoiceCallResponse(BaseModel):
     id: int
     call_id: str
-
     customer_id: int
     creator_id: int
+
+    caller_id: Optional[int] = None
+    receiver_id: Optional[int] = None
 
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
