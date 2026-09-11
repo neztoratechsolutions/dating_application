@@ -329,4 +329,4 @@ def check_follow_status(
     return {
         "following": follow is not None,
         "follow_id": follow.id if follow else None
-    }
+    } 
