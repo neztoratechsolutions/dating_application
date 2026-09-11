@@ -7,11 +7,13 @@ from database import engine, Base
 
 from models.users import User
 from models.pricing_details import PricingDetail
+
 from models.user_status import UserStatus
 from models.gallery import Gallery
 from models.review import Review
 from models.settings import Setting
 from models.gift_details import GiftDetail
+
 from models.ad_setting import AdSetting
 from models.tags import Tag
 from models.cms_settings import PrivacyPolicy
@@ -33,6 +35,10 @@ from models.video_call import VideoCall
 
 
 
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+import os
+
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
 from routes.auth import router as auth_router
@@ -41,6 +47,7 @@ from routes.gallery import router as gallery_router
 from routes.review import router as review_router
 from routes.settings import router as setting_router
 from routes.gift_details import router as giftdetails_router
+
 from routes.ad_settings import router as adsettings_router
 from routes.tags import router as tags_router
 from routes.privacy_policy import router as privacy_router
@@ -63,11 +70,22 @@ from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
 
 
-# Create FastAPI app first
+from routes.follow_detail import router as followers_router
+
+Base.metadata.create_all(bind=engine)
+
+
 app = FastAPI(
     title="Dating Application API",
     version="1.0.0"
 )
+origins = [
+    "http://localhost:5173", # Vite default
+    "http://localhost:3000", 
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+]
+
 
 
 app.mount("/uploads",StaticFiles(directory="uploads"),name="uploads")
@@ -76,11 +94,12 @@ app.mount("/uploads",StaticFiles(directory="uploads"),name="uploads")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["*"], 
     allow_headers=["*"],
 )
+
 
 
 # Create tables
@@ -89,6 +108,9 @@ Base.metadata.create_all(bind=engine)
 
 # Include routes
 
+
+app.include_router(state_router)
+app.include_router(gift_router)
 app.include_router(user_router)
 app.include_router(pricing_router)
 app.include_router(auth_router)
@@ -117,3 +139,10 @@ app.include_router(chat_router)
 app.include_router(chatmessage_router)
 app.include_router(video_call_router)
 app.include_router(customer_router)
+app.include_router(followers_router)
+
+
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+

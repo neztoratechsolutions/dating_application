@@ -4,10 +4,14 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.state import State
 
+
 router = APIRouter(
     prefix="/state",
     tags=["State"]
 )
+
+router = APIRouter(prefix="/states",tags=["States"])
+
 
 
 # DB Session
@@ -23,6 +27,7 @@ def get_db():
 @router.post("/")
 def create_state(state_name: str, db: Session = Depends(get_db)):
 
+
     existing_state = (
         db.query(State)
         .filter(State.state_name.ilike(state_name))
@@ -34,6 +39,7 @@ def create_state(state_name: str, db: Session = Depends(get_db)):
             status_code=400,
             detail="State already exists"
         )
+
 
     state = State(state_name=state_name)
 
