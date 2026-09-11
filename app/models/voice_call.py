@@ -80,3 +80,15 @@ class VoiceCall(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    caller_id = Column(
+    Integer,
+    ForeignKey("users.id", ondelete="CASCADE"),
+    nullable=False
+    )
+
+    receiver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
