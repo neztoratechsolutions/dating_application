@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models.settings import Setting
-from models.users import User
-from schemas.settings import SettingCreate, SettingResponse
+from app.database import get_db
+from app.models.settings import Setting
+from app.models.users import User
+from app.schemas.settings import SettingCreate, SettingResponse
 
 router = APIRouter(prefix="/settings",tags=["Settings"])
 

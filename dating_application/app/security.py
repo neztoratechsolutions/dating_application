@@ -3,7 +3,7 @@ import random
 import string
 import random
 from fastapi_mail import FastMail, MessageSchema
-from email_config import conf
+from app.email_config import conf
 
 async def send_otp_email(
     email: str,

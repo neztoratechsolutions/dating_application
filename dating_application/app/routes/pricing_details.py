@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models.pricing_details import PricingDetail
-from models.users import User
-from schemas.pricing_details import (PricingDetailCreate,PricingDetailUpdate,PricingDetailResponse)
+from app.database import SessionLocal
+from app.models.pricing_details import PricingDetail
+from app.models.users import User
+from app.schemas.pricing_details import (PricingDetailCreate,PricingDetailUpdate,PricingDetailResponse)
 
 router = APIRouter(prefix="/pricing-details",tags=["Pricing Details"])
 

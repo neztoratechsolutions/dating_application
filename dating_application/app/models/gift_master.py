@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, DateTime
 from sqlalchemy.sql import func
 
-from database import Base
+from app.database import Base
 
 
 class GiftMaster(Base):

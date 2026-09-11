@@ -7,7 +7,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import func
 
-from database import Base
+from app.database import Base
 
 
 class FavouriteCreator(Base):

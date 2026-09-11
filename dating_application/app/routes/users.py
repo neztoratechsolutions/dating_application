@@ -2,21 +2,21 @@ import os
 from fastapi import (APIRouter,Depends,HTTPException,status,UploadFile,File,Form,Query,status)
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models.users import User
-from models.state import State
-from schemas.users import (UserCreate,UserUpdate,UserResponse)
-from security import (hash_password,generate_referral_code)
+from app.database import SessionLocal
+from app.models.users import User
+from app.models.state import State
+from app.schemas.users import (UserCreate,UserUpdate,UserResponse)
+from app.security import (hash_password,generate_referral_code)
 from datetime import datetime, timezone
-from models.gallery import Gallery
+from app.models.gallery import Gallery
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func
-from models.social_models import FollowDetail
-from database import SessionLocal
-from models.users import User
-from models.user_status import UserStatus
-from models.review import Review
-from models.pricing_details import PricingDetail
+from app.models.social_models import FollowDetail
+from app.database import SessionLocal
+from app.models.users import User
+from app.models.user_status import UserStatus
+from app.models.review import Review
+from app.models.pricing_details import PricingDetail
 
 router = APIRouter(prefix="/users",tags=["Users"])
 

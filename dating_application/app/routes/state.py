@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models.state import State
+from app.database import SessionLocal
+from app.models.state import State
 
 router = APIRouter(prefix="/states",tags=["States"])
 

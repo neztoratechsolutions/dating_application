@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from models.user_status import UserStatus
+from app.models.user_status import UserStatus
 
 class UserStatusCreate(BaseModel):
     user_id: int

@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models.users import User
-from models.social_models import FollowDetail
-from schemas.follow_details import (
+from app.database import SessionLocal
+from app.models.users import User
+from app.models.social_models import FollowDetail
+from app.schemas.follow_details import (
     FollowDetailCreate,
     FollowDetailUpdate,
     FollowDetailResponse,UserFollowResponse
 )
 from sqlalchemy.orm import aliased
-from models.users import User
+from app.models.users import User
 router = APIRouter(
     prefix="/follow-details",
     tags=["Follow Details"]

@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy.orm import Session
 import os
 
-from database import SessionLocal
-from models.gallery import Gallery
-from models.users import User
-from schemas.gallery import GalleryResponse
+from app.database import SessionLocal
+from app.models.gallery import Gallery
+from app.models.users import User
+from app.schemas.gallery import GalleryResponse
 
 router = APIRouter(prefix="/gallery",tags=["Gallery"])
 

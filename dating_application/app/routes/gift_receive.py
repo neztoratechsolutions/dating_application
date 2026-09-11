@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models.users import User
-from models.gift_receive import Gift
-from schemas.gift_receive import SendGiftRequest
+from app.database import SessionLocal
+from app.models.users import User
+from app.models.gift_receive import Gift
+from app.schemas.gift_receive import SendGiftRequest
 
 router = APIRouter(
     prefix="/gifts",

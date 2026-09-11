@@ -1,34 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import engine, Base
+from app.database import engine, Base
 
-from models.state import State
-from models.gift_master import GiftMaster
-from models.users import User
-from models.pricing_details import PricingDetail
+from app.models.state import State
+from app.models.gift_master import GiftMaster
+from app.models.users import User
+from app.models.pricing_details import PricingDetail
 
-from models.user_status import UserStatus
-from models.gallery import Gallery
-from models.review import Review
-from models.settings import Setting
-from models.gift_details import GiftDetail
+from app.models.user_status import UserStatus
+from app.models.gallery import Gallery
+from app.models.review import Review
+from app.models.settings import Setting
+from app.models.gift_details import GiftDetail
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 import os
 
-from routes.state import router as state_router
-from routes.gift_master import router as gift_router
-from routes.users import router as user_router
-from routes.pricing_details import router as pricing_router
-from routes.auth import router as auth_router
-from routes.user_status_create import router as user_status_router
-from routes.gallery import router as gallery_router
-from routes.review import router as review_router
-from routes.settings import router as setting_router
-from routes.gift_details import router as giftdetails_router
-from routes.follow_detail import router as followers_router
-from routes.gift_receive import router as giftreceive_router
+from app.routes.state import router as state_router
+from app.routes.gift_master import router as gift_router
+from app.routes.users import router as user_router
+from app.routes.pricing_details import router as pricing_router
+from app.routes.auth import router as auth_router
+from app.routes.user_status_create import router as user_status_router
+from app.routes.gallery import router as gallery_router
+from app.routes.review import router as review_router
+from app.routes.settings import router as setting_router
+from app.routes.gift_details import router as giftdetails_router
+from app.routes.follow_detail import router as followers_router
+from app.routes.gift_receive import router as giftreceive_router
+from app.routes.count import router as count_router
+from app.routes.favorite import router as favorite_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -62,6 +64,8 @@ app.include_router(setting_router)
 app.include_router(giftdetails_router)
 app.include_router(followers_router)
 app.include_router(giftreceive_router)
+app.include_router(count_router)
+app.include_router(favorite_router)
 
 
 if not os.path.exists("uploads"):

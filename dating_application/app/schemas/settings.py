@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
-from models.settings import Setting
+from app.models.settings import Setting
 
 
 class SettingCreate(BaseModel):
