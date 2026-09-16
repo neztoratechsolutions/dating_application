@@ -1,4 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Numeric
+)
 from sqlalchemy.sql import func
 
 from database import Base
@@ -14,7 +21,7 @@ class VideoCall(Base):
     )
 
     video_call_id = Column(
-        String(20),
+        String(30),
         unique=True,
         nullable=False,
         index=True
@@ -22,14 +29,26 @@ class VideoCall(Base):
 
     customer_id = Column(
         Integer,
-        ForeignKey("users.id"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )
 
     creator_id = Column(
         Integer,
-        ForeignKey("users.id"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
+    )
+
+    caller_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True
+    )
+
+    receiver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True
     )
 
     start_time = Column(
@@ -43,8 +62,9 @@ class VideoCall(Base):
     )
 
     duration = Column(
-        Integer,
-        nullable=True
+        Numeric(10, 2),
+        default=0,
+        nullable=False
     )
 
     coins = Column(
@@ -61,7 +81,7 @@ class VideoCall(Base):
 
     status = Column(
         String(20),
-        default="pending",
+        default="ringing",
         nullable=False
     )
 
