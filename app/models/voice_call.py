@@ -21,7 +21,7 @@ class VoiceCall(Base):
     )
 
     call_id = Column(
-        String(50),
+        String(30),
         unique=True,
         nullable=False,
         index=True
@@ -50,8 +50,8 @@ class VoiceCall(Base):
     )
 
     duration = Column(
-        Integer,
-        default=0
+        DECIMAL(10, 2),
+        default=0.00
     )
 
     coins = Column(
@@ -82,9 +82,9 @@ class VoiceCall(Base):
     )
 
     caller_id = Column(
-    Integer,
-    ForeignKey("users.id", ondelete="CASCADE"),
-    nullable=False
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
     )
 
     receiver_id = Column(
