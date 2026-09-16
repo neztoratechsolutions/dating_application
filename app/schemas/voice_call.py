@@ -27,7 +27,7 @@ class VoiceCallCreate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
 
-    duration: int = 0
+    duration: Decimal = Decimal("0.00")
     coins: int = 0
     revenue: Decimal = Decimal("0.00")
 
@@ -41,12 +41,14 @@ class VoiceCallCreate(BaseModel):
 class VoiceCallUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    duration: Optional[int] = None
+    duration: Optional[Decimal] = None
     coins: Optional[int] = None
     revenue: Optional[Decimal] = None
     status: Optional[str] = None
 
 
+# ==========================================================
+# VOICE CALL RESPONSE
 # ==========================================================
 
 class VoiceCallResponse(BaseModel):
@@ -61,7 +63,7 @@ class VoiceCallResponse(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
 
-    duration: int
+    duration: Decimal
     coins: int
     revenue: Decimal
     status: str
