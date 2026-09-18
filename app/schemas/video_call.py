@@ -72,6 +72,9 @@ class VideoCallResponse(BaseModel):
 
     status: str
 
+    # First call = free / subsequent call = paid
+    is_free_call: bool
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
