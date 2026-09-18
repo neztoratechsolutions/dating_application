@@ -4,7 +4,8 @@ from sqlalchemy import (
     String,
     DECIMAL,
     DateTime,
-    ForeignKey
+    ForeignKey,
+    Boolean
 )
 from sqlalchemy.sql import func
 
@@ -68,6 +69,12 @@ class VoiceCall(Base):
         String(20),
         nullable=False,
         default="ongoing"
+    )
+
+    is_free_call = Column(
+        Boolean,
+        default=False,
+        nullable=False
     )
 
     created_at = Column(
