@@ -41,6 +41,7 @@ from models.chat_report import (
     ChatModerationAction,
 )
 from models.video_call import VideoCall
+from models.wallet import Wallet
 
 
 from routes.users import router as user_router
@@ -103,12 +104,6 @@ app.add_middleware(
 app.include_router(state_router)
 app.include_router(gift_router)
 
-
-app.mount("/uploads",StaticFiles(directory="uploads"),name="uploads")
-
-
-# Create tables
-Base.metadata.create_all(bind=engine)
 
 
 # Include routes
