@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 # ==========================================================
-# VOICE CALL INITIATE
+# INITIATE VOICE CALL
 # ==========================================================
 
 class VoiceCallInitiate(BaseModel):
@@ -48,12 +48,13 @@ class VoiceCallUpdate(BaseModel):
 
 
 # ==========================================================
-# VOICE CALL RESPONSE
+# RESPONSE
 # ==========================================================
 
 class VoiceCallResponse(BaseModel):
     id: int
     call_id: str
+
     customer_id: int
     creator_id: int
 
@@ -66,7 +67,9 @@ class VoiceCallResponse(BaseModel):
     duration: Decimal
     coins: int
     revenue: Decimal
+
     status: str
+    is_free_call: bool
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
