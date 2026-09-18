@@ -1,4 +1,5 @@
-import uuid
+import threading
+import time
 
 from datetime import datetime, date, timezone
 from decimal import Decimal
@@ -18,6 +19,7 @@ from database import get_db
 from models.users import User
 from models.user_status import UserStatus
 from models.video_call import VideoCall
+from models.wallet import Wallet
 
 from schemas.video_call import (
     VideoCallInitiate,
@@ -34,7 +36,16 @@ router = APIRouter(
 
 
 # ==========================================================
+# CONSTANTS
+# ==========================================================
+
+FREE_CALL_DURATION_SECONDS = 2
+PAID_CALL_COINS = 200
+
+
+# ==========================================================
 # GENERATE VIDEO CALL ID
+# FORMAT: VIDEO-YYYY-MM-DD-01
 # ==========================================================
 
 def generate_video_call_id(db: Session):
@@ -59,11 +70,14 @@ def generate_video_call_id(db: Session):
     )
 
     if last_call:
-        last_number = int(
-            last_call.video_call_id.split("-")[-1]
-        )
+        try:
+            last_number = int(
+                last_call.video_call_id.split("-")[-1]
+            )
+            next_number = last_number + 1
 
-        next_number = last_number + 1
+        except (ValueError, IndexError):
+            next_number = 1
 
     else:
         next_number = 1
@@ -153,6 +167,148 @@ def validate_customer_creator(
 
 
 # ==========================================================
+# CHECK FIRST FREE CALL
+# ==========================================================
+
+def is_first_free_call(
+    db: Session,
+    customer_id: int
+):
+
+    previous_free_call = (
+        db.query(VideoCall)
+        .filter(
+            VideoCall.customer_id == customer_id,
+            VideoCall.is_free_call.is_(True)
+        )
+        .first()
+    )
+
+    return previous_free_call is None
+
+
+# ==========================================================
+# CHECK WALLET FOR PAID CALL
+# ==========================================================
+
+def check_wallet_balance(
+    db: Session,
+    caller_id: int
+):
+
+    wallet = (
+        db.query(Wallet)
+        .filter(
+            Wallet.user_id == caller_id
+        )
+        .first()
+    )
+
+    if not wallet:
+        raise HTTPException(
+            status_code=404,
+            detail="Wallet not found"
+        )
+
+    if wallet.coins < PAID_CALL_COINS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient coins. {PAID_CALL_COINS} coins required"
+        )
+
+    return wallet
+
+
+# ==========================================================
+# AUTO END FREE VIDEO CALL
+# ==========================================================
+
+def auto_end_free_video_call(
+    video_call_id: str
+):
+
+    time.sleep(
+        FREE_CALL_DURATION_SECONDS
+    )
+
+    from database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+
+        video_call = (
+            db.query(VideoCall)
+            .filter(
+                VideoCall.video_call_id == video_call_id
+            )
+            .first()
+        )
+
+        if not video_call:
+            return
+
+        if not video_call.is_free_call:
+            return
+
+        if video_call.status != "ongoing":
+            return
+
+        if not video_call.start_time:
+            return
+
+        end_time = datetime.now(
+            timezone.utc
+        )
+
+        start_time = video_call.start_time
+
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(
+                tzinfo=timezone.utc
+            )
+
+        duration_seconds = (
+            end_time - start_time
+        ).total_seconds()
+
+        if duration_seconds < 0:
+            duration_seconds = 0
+
+        if duration_seconds > FREE_CALL_DURATION_SECONDS:
+            duration_seconds = FREE_CALL_DURATION_SECONDS
+
+        duration_hours = round(
+            duration_seconds / 3600,
+            2
+        )
+
+        video_call.end_time = end_time
+
+        video_call.duration = Decimal(
+            str(duration_hours)
+        )
+
+        video_call.coins = 0
+
+        video_call.revenue = Decimal(
+            "0.00"
+        )
+
+        video_call.status = "completed"
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+    finally:
+
+        db.close()
+
+
+# ==========================================================
 # INITIATE VIDEO CALL
 # ==========================================================
 
@@ -192,13 +348,19 @@ def initiate_video_call(
             detail="Receiver not found"
         )
 
-    if caller.role not in ["customer", "creator"]:
+    if caller.role not in [
+        "customer",
+        "creator"
+    ]:
         raise HTTPException(
             status_code=400,
             detail="Caller must be a customer or creator"
         )
 
-    if receiver.role not in ["customer", "creator"]:
+    if receiver.role not in [
+        "customer",
+        "creator"
+    ]:
         raise HTTPException(
             status_code=400,
             detail="Receiver must be a customer or creator"
@@ -210,12 +372,23 @@ def initiate_video_call(
             detail="Video call is allowed only between customer and creator"
         )
 
+    # ------------------------------------------------------
+    # CUSTOMER / CREATOR MAPPING
+    # ------------------------------------------------------
+
     if caller.role == "customer":
+
         customer_id = caller.id
         creator_id = receiver.id
+
     else:
+
         customer_id = receiver.id
         creator_id = caller.id
+
+    # ------------------------------------------------------
+    # CHECK ACTIVE CALL
+    # ------------------------------------------------------
 
     active_call = db.query(VideoCall).filter(
         VideoCall.status.in_(
@@ -241,8 +414,11 @@ def initiate_video_call(
             detail="An active video call already exists between these users"
         )
 
-    # Online status is informational only.
-    # Offline users are not blocked.
+    # ------------------------------------------------------
+    # ONLINE STATUS IS INFORMATIONAL ONLY
+    # OFFLINE USER WILL NOT BLOCK CALL
+    # ------------------------------------------------------
+
     caller_status = db.query(UserStatus).filter(
         UserStatus.user_id == request.caller_id
     ).first()
@@ -250,6 +426,31 @@ def initiate_video_call(
     receiver_status = db.query(UserStatus).filter(
         UserStatus.user_id == request.receiver_id
     ).first()
+
+    # ------------------------------------------------------
+    # FIRST FREE CALL
+    # ------------------------------------------------------
+
+    free_call = is_first_free_call(
+        db=db,
+        customer_id=customer_id
+    )
+
+    # ------------------------------------------------------
+    # PAID CALL - CHECK WALLET ONLY
+    # ACTUAL DEDUCTION WILL HAPPEN AT ACCEPT
+    # ------------------------------------------------------
+
+    if not free_call:
+
+        check_wallet_balance(
+            db=db,
+            caller_id=request.caller_id
+        )
+
+    # ------------------------------------------------------
+    # CREATE VIDEO CALL
+    # ------------------------------------------------------
 
     video_call = VideoCall(
         video_call_id=generate_video_call_id(db),
@@ -264,14 +465,20 @@ def initiate_video_call(
         end_time=None,
 
         duration=Decimal("0.00"),
+
         coins=0,
+
         revenue=Decimal("0.00"),
 
-        status="ringing"
+        status="ringing",
+
+        is_free_call=free_call
     )
 
     db.add(video_call)
+
     db.commit()
+
     db.refresh(video_call)
 
     return video_call
@@ -329,6 +536,30 @@ def create_video_call(
             detail="An active video call already exists between these users"
         )
 
+    # ------------------------------------------------------
+    # FIRST FREE CALL
+    # ------------------------------------------------------
+
+    free_call = is_first_free_call(
+        db=db,
+        customer_id=request.customer_id
+    )
+
+    # ------------------------------------------------------
+    # PAID CALL WALLET CHECK
+    # ------------------------------------------------------
+
+    if not free_call:
+
+        check_wallet_balance(
+            db=db,
+            caller_id=request.caller_id
+        )
+
+    # ------------------------------------------------------
+    # CREATE
+    # ------------------------------------------------------
+
     video_call = VideoCall(
         video_call_id=generate_video_call_id(db),
 
@@ -342,14 +573,20 @@ def create_video_call(
         end_time=None,
 
         duration=Decimal("0.00"),
+
         coins=0,
+
         revenue=Decimal("0.00"),
 
-        status="ringing"
+        status="ringing",
+
+        is_free_call=free_call
     )
 
     db.add(video_call)
+
     db.commit()
+
     db.refresh(video_call)
 
     return video_call
@@ -402,43 +639,59 @@ def get_all_video_calls(
     query = db.query(VideoCall)
 
     if call_date:
+
         query = query.filter(
-            func.date(VideoCall.created_at) == call_date
+            func.date(VideoCall.created_at)
+            == call_date
         )
 
     if start_date:
+
         query = query.filter(
-            func.date(VideoCall.created_at) >= start_date
+            func.date(VideoCall.created_at)
+            >= start_date
         )
 
     if end_date:
+
         query = query.filter(
-            func.date(VideoCall.created_at) <= end_date
+            func.date(VideoCall.created_at)
+            <= end_date
         )
 
     if customer_id:
+
         query = query.filter(
-            VideoCall.customer_id == customer_id
+            VideoCall.customer_id
+            == customer_id
         )
 
     if creator_id:
+
         query = query.filter(
-            VideoCall.creator_id == creator_id
+            VideoCall.creator_id
+            == creator_id
         )
 
     if caller_id:
+
         query = query.filter(
-            VideoCall.caller_id == caller_id
+            VideoCall.caller_id
+            == caller_id
         )
 
     if receiver_id:
+
         query = query.filter(
-            VideoCall.receiver_id == receiver_id
+            VideoCall.receiver_id
+            == receiver_id
         )
 
     if status:
+
         query = query.filter(
-            VideoCall.status == status
+            VideoCall.status
+            == status
         )
 
     video_calls = query.order_by(
@@ -446,6 +699,7 @@ def get_all_video_calls(
     ).all()
 
     if not video_calls:
+
         raise HTTPException(
             status_code=404,
             detail="No video calls found"
@@ -468,20 +722,83 @@ def accept_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
         )
 
     if video_call.status != "ringing":
+
         raise HTTPException(
             status_code=400,
             detail="Only ringing video calls can be accepted"
         )
+
+    # ======================================================
+    # PAID CALL - DEDUCT 200 COINS
+    # ======================================================
+
+    if not video_call.is_free_call:
+
+        wallet = (
+            db.query(Wallet)
+            .filter(
+                Wallet.user_id
+                == video_call.caller_id
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if not wallet:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Wallet not found"
+            )
+
+        if wallet.coins < PAID_CALL_COINS:
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient coins. {PAID_CALL_COINS} coins required"
+            )
+
+        wallet.coins -= PAID_CALL_COINS
+
+        wallet.spending = (
+            wallet.spending or Decimal("0.00")
+        ) + Decimal(
+            str(PAID_CALL_COINS)
+        )
+
+        wallet.last_transaction = datetime.now(
+            timezone.utc
+        )
+
+        video_call.coins = PAID_CALL_COINS
+
+        video_call.revenue = Decimal(
+            str(PAID_CALL_COINS)
+        )
+
+    else:
+
+        video_call.coins = 0
+
+        video_call.revenue = Decimal(
+            "0.00"
+        )
+
+    # ======================================================
+    # START CALL
+    # ======================================================
 
     video_call.status = "ongoing"
 
@@ -490,7 +807,22 @@ def accept_video_call(
     )
 
     db.commit()
+
     db.refresh(video_call)
+
+    # ======================================================
+    # FREE CALL AUTO END AFTER 2 SECONDS
+    # ======================================================
+
+    if video_call.is_free_call:
+
+        thread = threading.Thread(
+            target=auto_end_free_video_call,
+            args=(video_call.video_call_id,),
+            daemon=True
+        )
+
+        thread.start()
 
     return video_call
 
@@ -509,16 +841,19 @@ def reject_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
         )
 
     if video_call.status != "ringing":
+
         raise HTTPException(
             status_code=400,
             detail="Only ringing video calls can be rejected"
@@ -530,9 +865,18 @@ def reject_video_call(
         timezone.utc
     )
 
-    video_call.duration = Decimal("0.00")
+    video_call.duration = Decimal(
+        "0.00"
+    )
+
+    video_call.coins = 0
+
+    video_call.revenue = Decimal(
+        "0.00"
+    )
 
     db.commit()
+
     db.refresh(video_call)
 
     return video_call
@@ -552,22 +896,26 @@ def end_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
         )
 
     if video_call.status != "ongoing":
+
         raise HTTPException(
             status_code=400,
             detail="Only ongoing video calls can be ended"
         )
 
     if video_call.start_time is None:
+
         raise HTTPException(
             status_code=400,
             detail="Video call start time is missing"
@@ -580,6 +928,7 @@ def end_video_call(
     start_time = video_call.start_time
 
     if start_time.tzinfo is None:
+
         start_time = start_time.replace(
             tzinfo=timezone.utc
         )
@@ -589,7 +938,19 @@ def end_video_call(
     ).total_seconds()
 
     if duration_seconds < 0:
+
         duration_seconds = 0
+
+    # ------------------------------------------------------
+    # FREE CALL MAX 2 SECONDS
+    # ------------------------------------------------------
+
+    if video_call.is_free_call:
+
+        duration_seconds = min(
+            duration_seconds,
+            FREE_CALL_DURATION_SECONDS
+        )
 
     duration_hours = round(
         duration_seconds / 3600,
@@ -604,7 +965,17 @@ def end_video_call(
 
     video_call.status = "completed"
 
+    # Free call should never have coins/revenue
+    if video_call.is_free_call:
+
+        video_call.coins = 0
+
+        video_call.revenue = Decimal(
+            "0.00"
+        )
+
     db.commit()
+
     db.refresh(video_call)
 
     return video_call
@@ -624,10 +995,12 @@ def get_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
@@ -651,10 +1024,12 @@ def update_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
@@ -665,9 +1040,15 @@ def update_video_call(
     )
 
     for key, value in update_data.items():
-        setattr(video_call, key, value)
+
+        setattr(
+            video_call,
+            key,
+            value
+        )
 
     db.commit()
+
     db.refresh(video_call)
 
     return video_call
@@ -686,266 +1067,22 @@ def delete_video_call(
 ):
 
     video_call = db.query(VideoCall).filter(
-        VideoCall.video_call_id == video_call_id
+        VideoCall.video_call_id
+        == video_call_id
     ).first()
 
     if not video_call:
+
         raise HTTPException(
             status_code=404,
             detail="Video call not found"
         )
 
     db.delete(video_call)
+
     db.commit()
 
     return {
         "status": True,
         "message": "Video call deleted successfully"
     }
-
-
-# # ==========================================================
-# # DASHBOARD SUMMARY
-# # ==========================================================
-
-# @router.get(
-#     "/dashboard/summary"
-# )
-# def video_call_dashboard_summary(
-#     db: Session = Depends(get_db)
-# ):
-
-#     total_calls = db.query(VideoCall).count()
-
-#     completed_calls = db.query(VideoCall).filter(
-#         VideoCall.status == "completed"
-#     ).count()
-
-#     ongoing_calls = db.query(VideoCall).filter(
-#         VideoCall.status == "ongoing"
-#     ).count()
-
-#     ringing_calls = db.query(VideoCall).filter(
-#         VideoCall.status == "ringing"
-#     ).count()
-
-#     rejected_calls = db.query(VideoCall).filter(
-#         VideoCall.status == "rejected"
-#     ).count()
-
-#     total_duration = db.query(
-#         func.coalesce(
-#             func.sum(VideoCall.duration),
-#             0
-#         )
-#     ).scalar()
-
-#     total_coins = db.query(
-#         func.coalesce(
-#             func.sum(VideoCall.coins),
-#             0
-#         )
-#     ).scalar()
-
-#     total_revenue = db.query(
-#         func.coalesce(
-#             func.sum(VideoCall.revenue),
-#             0
-#         )
-#     ).scalar()
-
-#     return {
-#         "status": True,
-#         "message": "Video call dashboard summary fetched successfully",
-#         "data": {
-#             "total_calls": total_calls,
-#             "completed_calls": completed_calls,
-#             "ongoing_calls": ongoing_calls,
-#             "ringing_calls": ringing_calls,
-#             "rejected_calls": rejected_calls,
-#             "total_duration": total_duration,
-#             "total_coins": total_coins,
-#             "total_revenue": total_revenue
-#         }
-#     }
-
-
-# # ==========================================================
-# # DAILY VIDEO CALL VOLUME
-# # ==========================================================
-
-# @router.get(
-#     "/dashboard/daily-volume"
-# )
-# def daily_video_call_volume(
-#     start_date: date | None = None,
-#     end_date: date | None = None,
-#     db: Session = Depends(get_db)
-# ):
-
-#     query = db.query(
-#         func.date(
-#             VideoCall.created_at
-#         ).label("call_date"),
-
-#         func.count(
-#             VideoCall.id
-#         ).label("total_calls")
-#     )
-
-#     if start_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) >= start_date
-#         )
-
-#     if end_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) <= end_date
-#         )
-
-#     result = query.group_by(
-#         func.date(VideoCall.created_at)
-#     ).order_by(
-#         func.date(VideoCall.created_at)
-#     ).all()
-
-#     if not result:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="No daily video call data found"
-#         )
-
-#     return {
-#         "status": True,
-#         "message": "Daily video call volume fetched successfully",
-#         "data": [
-#             {
-#                 "date": row.call_date,
-#                 "total_calls": row.total_calls
-#             }
-#             for row in result
-#         ]
-#     }
-
-
-# # ==========================================================
-# # VIDEO CALL REVENUE
-# # ==========================================================
-
-# @router.get(
-#     "/dashboard/revenue"
-# )
-# def video_call_revenue(
-#     start_date: date | None = None,
-#     end_date: date | None = None,
-#     db: Session = Depends(get_db)
-# ):
-
-#     query = db.query(
-#         func.date(
-#             VideoCall.created_at
-#         ).label("call_date"),
-
-#         func.coalesce(
-#             func.sum(VideoCall.revenue),
-#             0
-#         ).label("total_revenue")
-#     )
-
-#     if start_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) >= start_date
-#         )
-
-#     if end_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) <= end_date
-#         )
-
-#     result = query.group_by(
-#         func.date(VideoCall.created_at)
-#     ).order_by(
-#         func.date(VideoCall.created_at)
-#     ).all()
-
-#     if not result:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="No video call revenue data found"
-#         )
-
-#     return {
-#         "status": True,
-#         "message": "Video call revenue fetched successfully",
-#         "data": [
-#             {
-#                 "date": row.call_date,
-#                 "total_revenue": row.total_revenue
-#             }
-#             for row in result
-#         ]
-#     }
-
-
-# # ==========================================================
-# # AVERAGE VIDEO CALL DURATION
-# # ==========================================================
-
-# @router.get(
-#     "/dashboard/average-duration"
-# )
-# def average_video_call_duration(
-#     start_date: date | None = None,
-#     end_date: date | None = None,
-#     db: Session = Depends(get_db)
-# ):
-
-#     query = db.query(
-#         func.date(
-#             VideoCall.created_at
-#         ).label("call_date"),
-
-#         func.coalesce(
-#             func.avg(VideoCall.duration),
-#             0
-#         ).label("average_duration")
-#     ).filter(
-#         VideoCall.status == "completed"
-#     )
-
-#     if start_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) >= start_date
-#         )
-
-#     if end_date:
-#         query = query.filter(
-#             func.date(VideoCall.created_at) <= end_date
-#         )
-
-#     result = query.group_by(
-#         func.date(VideoCall.created_at)
-#     ).order_by(
-#         func.date(VideoCall.created_at)
-#     ).all()
-
-#     if not result:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="No average video call duration data found"
-#         )
-
-#     return {
-#         "status": True,
-#         "message": "Average video call duration fetched successfully",
-#         "data": [
-#             {
-#                 "date": row.call_date,
-#                 "average_duration": round(
-#                     float(row.average_duration),
-#                     2
-#                 )
-#             }
-#             for row in result
-#         ]
-#     }
