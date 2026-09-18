@@ -4,7 +4,8 @@ from sqlalchemy import (
     String,
     DateTime,
     ForeignKey,
-    Numeric
+    Numeric,
+    Boolean
 )
 from sqlalchemy.sql import func
 
@@ -82,6 +83,13 @@ class VideoCall(Base):
     status = Column(
         String(20),
         default="ringing",
+        nullable=False
+    )
+
+    # First call = free, subsequent calls = paid
+    is_free_call = Column(
+        Boolean,
+        default=False,
         nullable=False
     )
 
