@@ -85,6 +85,19 @@ def create_user(
             detail="Email already exists"
         )
 
+    # ------------------------------------------------------
+    # Set role based on gender
+    # ------------------------------------------------------
+
+    if user.gender == "Male":
+        role = "customer"
+
+    elif user.gender == "Female":
+        role = "creator"
+
+    else:
+        role = "customer"
+
     new_user = User(
         email=user.email,
         phone=user.phone,
@@ -94,6 +107,8 @@ def create_user(
         description=user.description,
         state_id=user.state_id,
         profile_photo=user.profile_photo,
+        gender=user.gender,
+        role=role,
         referral_code=generate_referral_code()
     )
 
