@@ -707,9 +707,118 @@ def get_user(
 # UPDATE USER
 # ==========================================================
 
+# @router.put(
+#     "/{user_id}",
+#     response_model=UserResponse
+# )
+# async def update_user(
+#     user_id: int,
+
+#     display_name: str | None = Form(None),
+
+#     bio: str | None = Form(None),
+
+#     profile_photo: UploadFile | None = File(None),
+
+#     db: Session = Depends(get_db)
+# ):
+
+#     # ------------------------------------------------------
+#     # Get user
+#     # ------------------------------------------------------
+
+#     user = (
+#         db.query(User)
+#         .filter(
+#             User.id == user_id
+#         )
+#         .first()
+#     )
+
+#     if not user:
+
+#         raise HTTPException(
+#             status_code=404,
+#             detail="User not found"
+#         )
+
+#     # ------------------------------------------------------
+#     # Update display name
+#     # ------------------------------------------------------
+
+#     if display_name is not None:
+
+#         user.display_name = display_name
+
+#     # ------------------------------------------------------
+#     # Update bio
+#     # ------------------------------------------------------
+
+#     if bio is not None:
+
+#         user.bio = bio
+
+#     # ------------------------------------------------------
+#     # Update profile photo
+#     # ------------------------------------------------------
+
+#     if (
+#         profile_photo is not None
+#         and profile_photo.filename
+#     ):
+
+#         os.makedirs(
+#             UPLOAD_DIR,
+#             exist_ok=True
+#         )
+
+#         file_path = os.path.join(
+#             UPLOAD_DIR,
+#             profile_photo.filename
+#         )
+
+#         with open(
+#             file_path,
+#             "wb"
+#         ) as buffer:
+
+#             buffer.write(
+#                 await profile_photo.read()
+#             )
+
+#         user.profile_photo = file_path
+
+#     # ------------------------------------------------------
+#     # Save
+#     # ------------------------------------------------------
+
+#     db.commit()
+#     db.refresh(user)
+
+#     return {
+#         "message":
+#             "User updated successfully",
+
+#         "data": {
+
+#             "id":
+#                 user.id,
+
+#             "display_name":
+#                 user.display_name,
+
+#             "bio":
+#                 user.bio,
+
+#             "description":
+#                 user.description,
+
+#             "updated_at":
+#                 user.updated_at
+#         }
+#     }
 @router.put(
-    "/{user_id}",
-    response_model=UserResponse
+    "/{user_id}"
 )
 async def update_user(
     user_id: int,
@@ -736,7 +845,6 @@ async def update_user(
     )
 
     if not user:
-
         raise HTTPException(
             status_code=404,
             detail="User not found"
@@ -747,7 +855,6 @@ async def update_user(
     # ------------------------------------------------------
 
     if display_name is not None:
-
         user.display_name = display_name
 
     # ------------------------------------------------------
@@ -755,7 +862,6 @@ async def update_user(
     # ------------------------------------------------------
 
     if bio is not None:
-
         user.bio = bio
 
     # ------------------------------------------------------
@@ -789,35 +895,36 @@ async def update_user(
         user.profile_photo = file_path
 
     # ------------------------------------------------------
-    # Save
+    # Save changes
     # ------------------------------------------------------
 
     db.commit()
     db.refresh(user)
 
+    # ------------------------------------------------------
+    # Return response
+    # ------------------------------------------------------
+
     return {
-        "message":
-            "User updated successfully",
+        "message": "User updated successfully",
 
         "data": {
-
-            "id":
-                user.id,
-
-            "display_name":
-                user.display_name,
-
-            "bio":
-                user.bio,
-
-            "description":
-                user.description,
-
-            "updated_at":
-                user.updated_at
+            "id": user.id,
+            "display_name": user.display_name,
+            "bio": user.bio,
+            "description": user.description,
+            "email": user.email,
+            "phone": user.phone,
+            "referral_code": user.referral_code,
+            "state_id": user.state_id,
+            "profile_photo": user.profile_photo,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "gender": user.gender,
+            "role": user.role,
+            "updated_at": user.updated_at
         }
     }
-
 
 # ==========================================================
 # DELETE USER
