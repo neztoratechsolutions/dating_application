@@ -32,6 +32,7 @@ from app.routes.gift_receive import router as giftreceive_router
 from app.routes.count import router as count_router
 from app.routes.favorite import router as favorite_router
 from app.routes.quick_pack import router as quick_pack_router
+# from app.routes.admin_dashboard import router as admin_dashboard_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -68,6 +69,7 @@ app.include_router(giftreceive_router)
 app.include_router(count_router)
 app.include_router(favorite_router)
 app.include_router(quick_pack_router)
+# app.include_router(admin_dashboard_router)
 
 
 if not os.path.exists("uploads"):
