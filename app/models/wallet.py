@@ -1,4 +1,12 @@
-from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, DateTime, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    DECIMAL,
+    DateTime,
+    ForeignKey
+)
 from sqlalchemy.sql import func
 
 from database import Base
@@ -7,7 +15,11 @@ from database import Base
 class Wallet(Base):
     __tablename__ = "wallets"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
     user_id = Column(
         Integer,
@@ -16,19 +28,48 @@ class Wallet(Base):
         unique=True
     )
 
-    wallet_id = Column(String(30), unique=True, nullable=False)
+    wallet_id = Column(
+        String(30),
+        unique=True,
+        nullable=False,
+        index=True
+    )
 
-    balance = Column(DECIMAL(10, 2), default=0.00)
+    balance = Column(
+        DECIMAL(10, 2),
+        default=0.00,
+        nullable=False
+    )
 
-    coins = Column(Integer, default=0)
+    coins = Column(
+        Integer,
+        default=0,
+        nullable=False
+    )
 
-    deposits = Column(DECIMAL(10, 2), default=0.00)
+    deposits = Column(
+        DECIMAL(10, 2),
+        default=0.00,
+        nullable=False
+    )
 
-    spending = Column(DECIMAL(10, 2), default=0.00)
+    spending = Column(
+        DECIMAL(10, 2),
+        default=0.00,
+        nullable=False
+    )
 
-    last_transaction = Column(DateTime(timezone=True), nullable=True)
+    last_transaction = Column(
+        DateTime(timezone=True),
+        nullable=True
+    )
 
-    status = Column(Boolean, default=True)
+    # active / frozen / hold
+    status = Column(
+        String(20),
+        default="active",
+        nullable=False
+    )
 
     created_at = Column(
         DateTime(timezone=True),
