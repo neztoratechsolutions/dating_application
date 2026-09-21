@@ -23,7 +23,7 @@ from models.users import User
 from models.user_status import UserStatus
 from models.wallet import Wallet
 
-from app.schemas.voice_call import (
+from schemas.voice_call import (
     VoiceCallInitiate,
     VoiceCallCreate,
     VoiceCallUpdate,
