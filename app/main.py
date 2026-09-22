@@ -72,6 +72,7 @@ from routes.voice_call import router as voice_call_router
 
 from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
+from routes.quick_pack import router as quick_pack_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -118,7 +119,7 @@ app.include_router(giftdetails_router)
 
 app.include_router(followers_router)
 
-
+app.include_router(quick_pack_router)
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
