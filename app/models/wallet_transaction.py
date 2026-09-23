@@ -2,18 +2,18 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
-    Boolean,
-    DECIMAL,
     DateTime,
-    ForeignKey
+    ForeignKey,
+    Numeric
 )
+
 from sqlalchemy.sql import func
 
 from database import Base
 
 
-class Wallet(Base):
-    __tablename__ = "wallets"
+class WalletTransaction(Base):
+    __tablename__ = "wallet_transactions"
 
     id = Column(
         Integer,
@@ -21,22 +21,34 @@ class Wallet(Base):
         index=True
     )
 
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True
-    )
-
-    wallet_id = Column(
+    transaction_id = Column(
         String(30),
         unique=True,
         nullable=False,
         index=True
     )
 
-    balance = Column(
-        DECIMAL(10, 2),
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    wallet_id = Column(
+        Integer,
+        ForeignKey("wallets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    type = Column(
+        String(20),
+        nullable=False
+    )
+
+    amount = Column(
+        Numeric(10, 2),
         default=0.00,
         nullable=False
     )
@@ -47,33 +59,21 @@ class Wallet(Base):
         nullable=False
     )
 
-    deposits = Column(
-        DECIMAL(10, 2),
-        default=0.00,
+    method = Column(
+        String(30),
         nullable=False
     )
 
-    spending = Column(
-        DECIMAL(10, 2),
-        default=0.00,
-        nullable=False
-    )
-
-    last_transaction = Column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-
-    # active / frozen / hold
     status = Column(
         String(20),
-        default="active",
+        default="pending",
         nullable=False
     )
 
     created_at = Column(
         DateTime(timezone=True),
-        server_default=func.now()
+        server_default=func.now(),
+        nullable=False
     )
 
     updated_at = Column(
