@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 
-from models.kyc_detail import KYCDetail
+from models.kyc_detail import KYCDetail, CreatorKYC
 from models.users import User
 from models.state import State
 
@@ -1565,3 +1565,234 @@ def re_upload_kyc(
     db.refresh(kyc)
 
     return kyc
+
+
+
+
+@router.get("/review/{user_id}")
+def review_kyc(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    # -----------------------------
+    # Check User
+    # -----------------------------
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # -----------------------------
+    # Only Creator KYC Review
+    # -----------------------------
+    if user.role != "creator":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="KYC review is available only for creator"
+        )
+
+    # -----------------------------
+    # Get KYC
+    # -----------------------------
+    kyc = db.query(KYCDetail).filter(
+        KYCDetail.user_id == user_id
+    ).first()
+
+    if not kyc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="KYC data not found for this user"
+        )
+
+    # -----------------------------
+    # Get Creator Bank KYC
+    # -----------------------------
+    bank_kyc = db.query(CreatorKYC).filter(
+        CreatorKYC.user_id == user_id
+    ).first()
+
+    # -----------------------------
+    # Get State
+    # -----------------------------
+    state = None
+
+    if user.state_id:
+        state = db.query(State).filter(
+            State.id == user.state_id
+        ).first()
+
+    # -----------------------------
+    # Creator ID
+    # -----------------------------
+    creator_id = f"VLR{user.id:05d}"
+
+    # =====================================================
+    # KYC TIMELINE
+    # =====================================================
+
+    kyc_timeline = []
+
+    def get_file_uploaded_time(file_path):
+        """
+        Get uploaded file date/time from file modification time.
+        """
+        if not file_path:
+            return None
+
+        if not os.path.exists(file_path):
+            return None
+
+        return datetime.fromtimestamp(
+            os.path.getmtime(file_path)
+        ).astimezone()
+
+    # -----------------------------
+    # Signup completed
+    # -----------------------------
+    if user.created_at:
+        kyc_timeline.append({
+            "title": "Signup completed",
+            "date": user.created_at
+        })
+
+    # -----------------------------
+    # Aadhaar uploaded
+    # -----------------------------
+    aadhar_uploaded_at = get_file_uploaded_time(
+        kyc.aadhar_photo
+    )
+
+    if aadhar_uploaded_at:
+        kyc_timeline.append({
+            "title": "Aadhaar uploaded",
+            "date": aadhar_uploaded_at
+        })
+
+    # -----------------------------
+    # PAN uploaded
+    # -----------------------------
+    pan_uploaded_at = get_file_uploaded_time(
+        kyc.pan_photo
+    )
+
+    if pan_uploaded_at:
+        kyc_timeline.append({
+            "title": "PAN uploaded",
+            "date": pan_uploaded_at
+        })
+
+    # -----------------------------
+    # Selfie captured
+    # -----------------------------
+    selfie_uploaded_at = get_file_uploaded_time(
+        kyc.selfie_photo
+    )
+
+    if selfie_uploaded_at:
+        kyc_timeline.append({
+            "title": "Selfie captured",
+            "date": selfie_uploaded_at
+        })
+
+    # -----------------------------
+    # KYC submitted for review
+    # -----------------------------
+    if kyc.created_at:
+        kyc_timeline.append({
+            "title": "KYC submitted for review",
+            "date": kyc.created_at
+        })
+
+    # -----------------------------
+    # Sort Timeline
+    # -----------------------------
+    kyc_timeline.sort(
+        key=lambda x: x["date"]
+    )
+
+    # =====================================================
+    # RESPONSE
+    # =====================================================
+
+    return {
+        "status": 200,
+        "message": "KYC review details fetched successfully",
+        "data": {
+            "user_id": user.id,
+            "creator_id": creator_id,
+
+            # -------------------------
+            # Personal Details
+            # -------------------------
+            "personal_details": {
+                "display_name": user.display_name,
+                "phone": user.phone,
+                "email": user.email,
+                "state_id": user.state_id,
+                "state_name": state.state_name if state else None,
+                "profile_photo": user.profile_photo,
+                "joined_date": user.created_at
+            },
+
+            # -------------------------
+            # Bank Details
+            # -------------------------
+            "bank_details": {
+                "bank_photo": (
+                    bank_kyc.bank_photo
+                    if bank_kyc
+                    else None
+                ),
+                "bank_status": (
+                    bank_kyc.bank_status
+                    if bank_kyc
+                    else None
+                ),
+                "uploaded_at": (
+                    bank_kyc.created_at
+                    if bank_kyc
+                    else None
+                ),
+                "updated_at": (
+                    bank_kyc.updated_at
+                    if bank_kyc
+                    else None
+                )
+            },
+
+            # -------------------------
+            # KYC Documents
+            # -------------------------
+            "documents": {
+                "aadhar": {
+                    "photo": kyc.aadhar_photo,
+                    "status": kyc.aadhar_status
+                },
+                "pan": {
+                    "photo": kyc.pan_photo,
+                    "status": kyc.pan_status
+                },
+                "selfie": {
+                    "photo": kyc.selfie_photo,
+                    "status": kyc.selfie_status
+                }
+            },
+
+            # -------------------------
+            # Overall KYC Status
+            # -------------------------
+            "kyc_status": kyc.status,
+
+            "rejection_reason": kyc.rejection_reason,
+
+            # -------------------------
+            # KYC Timeline
+            # -------------------------
+            "kyc_timeline": kyc_timeline
+        }
+    }
