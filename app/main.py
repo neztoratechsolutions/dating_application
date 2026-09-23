@@ -77,6 +77,7 @@ from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
 from routes.wallet import router as wallet_router
 from routes.kyc_details import router as kyc_detail_router
+from routes.creator_kyc import router as creator_kyc_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -148,3 +149,4 @@ app.include_router(video_call_router)
 app.include_router(customer_router)
 app.include_router(wallet_router)
 app.include_router(kyc_detail_router)
+app.include_router(creator_kyc_router)
