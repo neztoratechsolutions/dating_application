@@ -44,6 +44,8 @@ from models.video_call import VideoCall
 from models.wallet_transaction import WalletTransaction
 from models.wallet import Wallet
 from models.kyc_detail import KYCDetail
+from models.earnings import Earning
+
 
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
@@ -79,6 +81,7 @@ from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
 
 from routes.quick_pack import router as quick_pack_router
+from routes.earnings import router as earnings_router
 
 
 
@@ -149,3 +152,4 @@ app.include_router(customer_router)
 app.include_router(wallet_router)
 app.include_router(kyc_detail_router)
 app.include_router(creator_kyc_router)
+app.include_router(earnings_router)
