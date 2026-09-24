@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,aliased
 from datetime import date
 
 from database import get_db
 from models.review import Review
 from models.users import User
-from schemas.review import ReviewCreate, ReviewResponse
+from schemas.review import ReviewCreate, ReviewResponse,ReviewByUserResponse
 
 
 router = APIRouter(
@@ -188,3 +188,63 @@ def delete_review(
     return {
         "message": "Review deleted successfully"
     }
+
+@router.get(
+    "/reviewee/{reviewee_id}",
+    response_model=list[ReviewByUserResponse],
+    status_code=status.HTTP_200_OK
+)
+def get_reviews_by_reviewee(
+    reviewee_id: int,
+    db: Session = Depends(get_db)
+):
+    Reviewer = aliased(User)
+    Reviewee = aliased(User)
+
+    reviews = (
+        db.query(
+            Review.id,
+            Review.reviewer_id,
+            Reviewer.display_name.label("reviewer_name"),
+            Review.reviewee_id,
+            Reviewee.email.label("reviewee_name"),
+            Review.star_details,
+            Review.description,
+            Review.submitted_at
+        )
+        .join(
+            Reviewer,
+            Reviewer.id == Review.reviewer_id
+        )
+        .join(
+            Reviewee,
+            Reviewee.id == Review.reviewee_id
+        )
+        .filter(
+            Review.reviewee_id == reviewee_id
+        )
+        .order_by(
+            Review.submitted_at.desc()
+        )
+        .all()
+    )
+
+    if not reviews:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No reviews found for this user"
+        )
+
+    return [
+        {
+            "id": review.id,
+            "reviewer_id": review.reviewer_id,
+            "reviewer_name": review.reviewer_name,
+            "reviewee_id": review.reviewee_id,
+            "reviewee_name": review.reviewee_name,
+            "star_details": review.star_details,
+            "description": review.description,
+            "submitted_at": review.submitted_at
+        }
+        for review in reviews
+    ]

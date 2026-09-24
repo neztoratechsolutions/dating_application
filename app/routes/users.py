@@ -265,7 +265,7 @@ def get_users_filter(
 
         .outerjoin(
             Review,
-            User.id == Review.user_id
+            User.id == Review.reviewee_id
         )
 
         .filter(
@@ -440,9 +440,269 @@ def get_users(
 # GET USER BY ID
 # ==========================================================
 
+# @router.get(
+#     "/{user_id}",
+#     response_model=UserResponse,
+#     status_code=status.HTTP_200_OK
+# )
+# def get_user(
+#     user_id: int,
+#     db: Session = Depends(get_db)
+# ):
+
+#     result = (
+#         db.query(
+#             User,
+#             State
+#         )
+
+#         .outerjoin(
+#             State,
+#             User.state_id == State.id
+#         )
+
+#         .filter(
+#             User.id == user_id
+#         )
+
+#         .first()
+#     )
+
+#     if not result:
+
+#         raise HTTPException(
+#             status_code=404,
+#             detail="User not found"
+#         )
+
+#     user, state = result
+
+#     # ------------------------------------------------------
+#     # User status
+#     # ------------------------------------------------------
+
+#     status_obj = (
+#         db.query(UserStatus)
+#         .filter(
+#             UserStatus.user_id == user.id
+#         )
+#         .first()
+#     )
+
+#     # ------------------------------------------------------
+#     # Pricing
+#     # ------------------------------------------------------
+
+#     pricing = (
+#         db.query(PricingDetail)
+#         .filter(
+#             PricingDetail.user_id == user.id
+#         )
+#         .first()
+#     )
+
+#     # ------------------------------------------------------
+#     # Gallery
+#     # ------------------------------------------------------
+
+#     gallery = (
+#         db.query(Gallery)
+#         .filter(
+#             Gallery.user_id == user.id
+#         )
+#         .all()
+#     )
+
+#     # ------------------------------------------------------
+#     # Reviews
+#     # ------------------------------------------------------
+
+#     review_data = (
+#         db.query(
+
+#             func.coalesce(
+#                 func.avg(
+#                     Review.star_details
+#                 ),
+#                 0
+#             ).label(
+#                 "average_rating"
+#             ),
+
+#             func.count(
+#                 Review.id
+#             ).label(
+#                 "total_reviews"
+#             )
+#         )
+
+#         .filter(
+#             Review.user_id == user.id
+#         )
+
+#         .first()
+#     )
+
+#     # ------------------------------------------------------
+#     # Followers count
+#     # ------------------------------------------------------
+
+#     followers_count = (
+#         db.query(
+#             func.count(
+#                 FollowDetail.id
+#             )
+#         )
+
+#         .filter(
+#             FollowDetail.following_id == user.id,
+#             FollowDetail.follow_status == "following"
+#         )
+
+#         .scalar()
+#     )
+
+#     # ------------------------------------------------------
+#     # Following count
+#     # ------------------------------------------------------
+
+#     following_count = (
+#         db.query(
+#             func.count(
+#                 FollowDetail.id
+#             )
+#         )
+
+#         .filter(
+#             FollowDetail.follower_id == user.id,
+#             FollowDetail.follow_status == "following"
+#         )
+
+#         .scalar()
+#     )
+
+#     # ------------------------------------------------------
+#     # Response
+#     # ------------------------------------------------------
+
+#     return {
+#         "status_code": status.HTTP_200_OK,
+
+#         "message":
+#             "User details fetched successfully",
+
+#         "data": {
+
+#             "id":
+#                 user.id,
+
+#             "display_name":
+#                 user.display_name,
+
+#             "email":
+#                 user.email,
+
+#             "phone":
+#                 user.phone,
+
+#             "bio":
+#                 user.bio,
+
+#             "description":
+#                 user.description,
+
+#             "role":
+#                 user.role,
+
+#             "state": {
+
+#                 "id":
+#                     state.id
+#                     if state
+#                     else None,
+
+#                 "name":
+#                     state.state_name
+#                     if state
+#                     else None
+#             },
+
+#             "profile_photo":
+#                 user.profile_photo,
+
+#             "is_online":
+#                 (
+#                     status_obj.is_online
+#                     if status_obj
+#                     else False
+#                 ),
+
+#             "followers_count":
+#                 followers_count,
+
+#             "following_count":
+#                 following_count,
+
+#             "reviews": {
+
+#                 "average_rating":
+#                     round(
+#                         float(
+#                             review_data.average_rating
+#                         ),
+#                         1
+#                     ),
+
+#                 "total_reviews":
+#                     review_data.total_reviews
+#             },
+
+#             "pricing": {
+
+#                 "chat_amount":
+#                     (
+#                         float(
+#                             pricing.chat_amount
+#                         )
+#                         if pricing
+#                         else 0
+#                     ),
+
+#                 "voice_call_amount":
+#                     (
+#                         float(
+#                             pricing.voice_call_amount
+#                         )
+#                         if pricing
+#                         else 0
+#                     ),
+
+#                 "video_call_amount":
+#                     (
+#                         float(
+#                             pricing.video_call_amount
+#                         )
+#                         if pricing
+#                         else 0
+#                     )
+#             },
+
+#             "gallery": [
+
+#                 {
+#                     "id":
+#                         image.id,
+
+#                     "photo":
+#                         image.photo
+#                 }
+
+#                 for image in gallery
+#             ]
+#         }
+#     }
 @router.get(
     "/{user_id}",
-    response_model=UserResponse,
     status_code=status.HTTP_200_OK
 )
 def get_user(
@@ -450,36 +710,36 @@ def get_user(
     db: Session = Depends(get_db)
 ):
 
+    # --------------------------------------------------
+    # GET USER + STATE
+    # --------------------------------------------------
+
     result = (
         db.query(
             User,
             State
         )
-
         .outerjoin(
             State,
             User.state_id == State.id
         )
-
         .filter(
             User.id == user_id
         )
-
         .first()
     )
 
     if not result:
-
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
 
     user, state = result
 
-    # ------------------------------------------------------
-    # User status
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # USER ONLINE STATUS
+    # --------------------------------------------------
 
     status_obj = (
         db.query(UserStatus)
@@ -489,9 +749,9 @@ def get_user(
         .first()
     )
 
-    # ------------------------------------------------------
-    # Pricing
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # PRICING DETAILS
+    # --------------------------------------------------
 
     pricing = (
         db.query(PricingDetail)
@@ -501,9 +761,9 @@ def get_user(
         .first()
     )
 
-    # ------------------------------------------------------
-    # Gallery
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # GALLERY
+    # --------------------------------------------------
 
     gallery = (
         db.query(Gallery)
@@ -513,195 +773,173 @@ def get_user(
         .all()
     )
 
-    # ------------------------------------------------------
-    # Reviews
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # REVIEWS
+    # --------------------------------------------------
 
     review_data = (
         db.query(
-
             func.coalesce(
-                func.avg(
-                    Review.star_details
-                ),
+                func.avg(Review.star_details),
                 0
-            ).label(
-                "average_rating"
-            ),
-
+            ).label("average_rating"),
             func.count(
                 Review.id
-            ).label(
-                "total_reviews"
-            )
+            ).label("total_reviews")
         )
-
         .filter(
-            Review.user_id == user.id
+            Review.reviewee_id == user.id
         )
-
         .first()
     )
 
-    # ------------------------------------------------------
-    # Followers count
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # FOLLOWERS COUNT
+    # --------------------------------------------------
 
     followers_count = (
         db.query(
-            func.count(
-                FollowDetail.id
-            )
+            func.count(FollowDetail.id)
         )
-
         .filter(
             FollowDetail.following_id == user.id,
             FollowDetail.follow_status == "following"
         )
-
         .scalar()
-    )
+    ) or 0
 
-    # ------------------------------------------------------
-    # Following count
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # FOLLOWING COUNT
+    # --------------------------------------------------
 
     following_count = (
         db.query(
-            func.count(
-                FollowDetail.id
-            )
+            func.count(FollowDetail.id)
         )
-
         .filter(
             FollowDetail.follower_id == user.id,
             FollowDetail.follow_status == "following"
         )
-
         .scalar()
-    )
+    ) or 0
 
-    # ------------------------------------------------------
-    # Response
-    # ------------------------------------------------------
+    # --------------------------------------------------
+    # RESPONSE
+    # --------------------------------------------------
 
     return {
         "status_code": status.HTTP_200_OK,
-
-        "message":
-            "User details fetched successfully",
+        "message": "User details fetched successfully",
 
         "data": {
 
-            "id":
-                user.id,
+            # ------------------------------------------
+            # BASIC USER DETAILS
+            # ------------------------------------------
 
-            "display_name":
-                user.display_name,
+            "id": user.id,
+            "display_name": user.display_name,
+            "email": user.email,
+            "phone": user.phone,
+            "bio": user.bio,
+            "description": user.description,
+            "role": user.role,
 
-            "email":
-                user.email,
+            # ------------------------------------------
+            # ADDITIONAL USER DETAILS
+            # ------------------------------------------
 
-            "phone":
-                user.phone,
+            "referral_code": user.referral_code,
+            "state_id": user.state_id,
+            "profile_photo": user.profile_photo,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "gender": user.gender,
 
-            "bio":
-                user.bio,
-
-            "description":
-                user.description,
-
-            "role":
-                user.role,
+            # ------------------------------------------
+            # STATE
+            # ------------------------------------------
 
             "state": {
-
-                "id":
-                    state.id
-                    if state
-                    else None,
-
-                "name":
-                    state.state_name
-                    if state
-                    else None
+                "id": state.id if state else None,
+                "name": state.state_name if state else None
             },
 
-            "profile_photo":
-                user.profile_photo,
+            # ------------------------------------------
+            # ONLINE STATUS
+            # ------------------------------------------
 
-            "is_online":
-                (
-                    status_obj.is_online
-                    if status_obj
-                    else False
-                ),
+            "is_online": (
+                status_obj.is_online
+                if status_obj
+                else False
+            ),
 
-            "followers_count":
-                followers_count,
+            # ------------------------------------------
+            # FOLLOWERS / FOLLOWING
+            # ------------------------------------------
 
-            "following_count":
-                following_count,
+            "followers_count": followers_count,
+            "following_count": following_count,
+
+            # ------------------------------------------
+            # REVIEWS
+            # ------------------------------------------
 
             "reviews": {
-
-                "average_rating":
-                    round(
-                        float(
-                            review_data.average_rating
-                        ),
-                        1
+                "average_rating": round(
+                    float(
+                        review_data.average_rating
+                        if review_data
+                        else 0
                     ),
+                    1
+                ),
 
-                "total_reviews":
-                    review_data.total_reviews
+                "total_reviews": (
+                    int(review_data.total_reviews)
+                    if review_data
+                    else 0
+                )
             },
+
+            # ------------------------------------------
+            # PRICING
+            # ------------------------------------------
 
             "pricing": {
+                "chat_amount": (
+                    float(pricing.chat_amount)
+                    if pricing and pricing.chat_amount is not None
+                    else 0
+                ),
 
-                "chat_amount":
-                    (
-                        float(
-                            pricing.chat_amount
-                        )
-                        if pricing
-                        else 0
-                    ),
+                "voice_call_amount": (
+                    float(pricing.voice_call_amount)
+                    if pricing and pricing.voice_call_amount is not None
+                    else 0
+                ),
 
-                "voice_call_amount":
-                    (
-                        float(
-                            pricing.voice_call_amount
-                        )
-                        if pricing
-                        else 0
-                    ),
-
-                "video_call_amount":
-                    (
-                        float(
-                            pricing.video_call_amount
-                        )
-                        if pricing
-                        else 0
-                    )
+                "video_call_amount": (
+                    float(pricing.video_call_amount)
+                    if pricing and pricing.video_call_amount is not None
+                    else 0
+                )
             },
 
+            # ------------------------------------------
+            # GALLERY
+            # ------------------------------------------
+
             "gallery": [
-
                 {
-                    "id":
-                        image.id,
-
-                    "photo":
-                        image.photo
+                    "id": image.id,
+                    "photo": image.photo
                 }
-
                 for image in gallery
             ]
         }
     }
-
 
 # ==========================================================
 # UPDATE USER

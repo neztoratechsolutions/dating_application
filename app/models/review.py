@@ -1,10 +1,4 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    Text,
-    DateTime,
-    ForeignKey
-)
+from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
 from database import Base
@@ -21,14 +15,10 @@ class Review(Base):
 
     reviewer_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
-
-    reviewee_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
         nullable=False,
         index=True
     )
@@ -36,6 +26,16 @@ class Review(Base):
     star_details = Column(
         Integer,
         nullable=False
+    )
+
+    reviewee_id = Column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False,
+        index=True
     )
 
     description = Column(

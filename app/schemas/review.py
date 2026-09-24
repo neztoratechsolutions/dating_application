@@ -19,3 +19,19 @@ class ReviewResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ReviewByUserResponse(BaseModel):
+    id: int
+    reviewer_id: int
+    reviewer_name: str
+    reviewee_id: int
+    reviewee_name: str
+    star_details: int
+    description: str | None = None
+    submitted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+    

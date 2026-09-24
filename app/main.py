@@ -66,18 +66,20 @@ from routes.safety_policy import router as safety_policy_router
 from routes.about_us import router as about_us_router
 from routes.faq import router as faq_router
 from routes.seo_settings import router as seo_settings_router
-from routes.support_ticket import router as support_ticket_router
 from routes.app_setting import router as app_setting_router
 from routes.state import router as state_router
 from routes.gift_master import router as gift_router
 from routes.voice_call import router as voice_call_router
-from routes.chat import router as chat_router
-from routes.chatmessage import router as chatmessage_router
+
 from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
+
 from routes.wallet import router as wallet_router
 from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
+
+from routes.quick_pack import router as quick_pack_router
+
 
 
 Base.metadata.create_all(bind=engine)
@@ -124,7 +126,7 @@ app.include_router(giftdetails_router)
 
 app.include_router(followers_router)
 
-
+app.include_router(quick_pack_router)
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -140,11 +142,8 @@ app.include_router(safety_policy_router)
 app.include_router(about_us_router)
 app.include_router(faq_router)
 app.include_router(seo_settings_router)
-app.include_router(support_ticket_router)
 app.include_router(app_setting_router)
 app.include_router(voice_call_router)
-app.include_router(chat_router)
-app.include_router(chatmessage_router)
 app.include_router(video_call_router)
 app.include_router(customer_router)
 app.include_router(wallet_router)
