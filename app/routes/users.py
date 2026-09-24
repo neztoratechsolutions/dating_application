@@ -63,6 +63,13 @@ def get_db():
 # ==========================================================
 # CREATE USER
 # ==========================================================
+# ==========================================================
+# CREATE USER
+# ==========================================================
+
+# ==========================================================
+# CREATE USER
+# ==========================================================
 
 @router.post(
     "/",
@@ -85,6 +92,25 @@ def create_user(
             detail="Email already exists"
         )
 
+    existing_phone = (
+        db.query(User)
+        .filter(User.phone == user.phone)
+        .first()
+    )
+
+    if existing_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Mobile number already exists"
+        )
+
+    # ------------------------------------------------------
+    # Map role based on gender
+    # ------------------------------------------------------
+    # If gender is Male -> role is "customer"
+    # If gender is Female -> role is "creator"
+    assigned_role = "creator" if user.gender == "Female" else "customer"
+
     new_user = User(
         email=user.email,
         phone=user.phone,
@@ -94,6 +120,8 @@ def create_user(
         description=user.description,
         state_id=user.state_id,
         profile_photo=user.profile_photo,
+        gender=user.gender,
+        role=assigned_role,              # <--- Pass the dynamically assigned role here
         referral_code=generate_referral_code()
     )
 
@@ -102,6 +130,44 @@ def create_user(
     db.refresh(new_user)
 
     return new_user
+# @router.post(
+#     "/",
+#     response_model=UserResponse
+# )
+# def create_user(
+#     user: UserCreate,
+#     db: Session = Depends(get_db)
+# ):
+
+#     existing_user = (
+#         db.query(User)
+#         .filter(User.email == user.email)
+#         .first()
+#     )
+
+#     if existing_user:
+#         raise HTTPException(
+#             status_code=400,
+#             detail="Email already exists"
+#         )
+
+#     new_user = User(
+#         email=user.email,
+#         phone=user.phone,
+#         password=hash_password(user.password),
+#         display_name=user.display_name,
+#         bio=user.bio,
+#         description=user.description,
+#         state_id=user.state_id,
+#         profile_photo=user.profile_photo,
+#         referral_code=generate_referral_code()
+#     )
+
+#     db.add(new_user)
+#     db.commit()
+#     db.refresh(new_user)
+
+#     return new_user
 
 
 # ==========================================================

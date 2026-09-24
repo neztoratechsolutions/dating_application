@@ -42,7 +42,11 @@ from models.chat_report import (
 )
 from models.video_call import VideoCall
 from models.wallet import Wallet
+from models.kyc_detail import KYCDetail
 
+
+from routes.kyc_details import router as kyc_detail_router
+from routes.creator_kyc import router as creator_kyc_router
 
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
@@ -73,8 +77,9 @@ from routes.voice_call import router as voice_call_router
 from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
 from routes.quick_pack import router as quick_pack_router
-
-
+from routes.count import router as count_router
+from routes.helpsupport import router as helpsupport_router
+from routes.favourite import router as favourite_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -139,3 +144,8 @@ app.include_router(app_setting_router)
 app.include_router(voice_call_router)
 app.include_router(video_call_router)
 app.include_router(customer_router)
+app.include_router(count_router)
+app.include_router(helpsupport_router)
+app.include_router(kyc_detail_router)
+app.include_router(creator_kyc_router)
+app.include_router(favourite_router)
