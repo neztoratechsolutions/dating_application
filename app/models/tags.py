@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -13,7 +13,7 @@ class Tag(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
     user_id = Column(
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )

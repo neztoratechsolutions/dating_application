@@ -87,3 +87,65 @@ def get_user_gallery(
     ).all()
 
     return photos
+
+@router.delete(
+    "/user/{user_id}/{gallery_id}",
+    status_code=status.HTTP_200_OK
+)
+def delete_user_gallery_image(
+    user_id: int,
+    gallery_id: int,
+    db: Session = Depends(get_db)
+):
+
+    # --------------------------------------------------
+    # CHECK USER
+    # --------------------------------------------------
+
+    user = (
+        db.query(User)
+        .filter(
+            User.id == user_id
+        )
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # --------------------------------------------------
+    # GET GALLERY IMAGE
+    # --------------------------------------------------
+
+    gallery = (
+        db.query(Gallery)
+        .filter(
+            Gallery.id == gallery_id,
+            Gallery.user_id == user_id
+        )
+        .first()
+    )
+
+    if not gallery:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Gallery image not found for this user"
+        )
+
+    # --------------------------------------------------
+    # DELETE IMAGE
+    # --------------------------------------------------
+
+    db.delete(gallery)
+    db.commit()
+
+    return {
+        "status_code": status.HTTP_200_OK,
+        "message": "Gallery image deleted successfully",
+        "data": {
+            "id": gallery_id
+        }
+    }
