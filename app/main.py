@@ -46,6 +46,7 @@ from models.wallet import Wallet
 from models.kyc_detail import KYCDetail
 from models.earnings import Earning
 from models.gift_revenue import GiftRevenue
+from models.help_support import HelpSupport
 
 
 from routes.users import router as user_router
@@ -84,7 +85,7 @@ from routes.creator_kyc import router as creator_kyc_router
 from routes.quick_pack import router as quick_pack_router
 from routes.earnings import router as earnings_router
 from routes.gift_revenue import router as gift_revenue_router
-
+from routes.help_support import router as help_support_router
 
 
 
@@ -158,3 +159,4 @@ app.include_router(kyc_detail_router)
 app.include_router(creator_kyc_router)
 app.include_router(earnings_router)
 app.include_router(gift_revenue_router)
+app.include_router(help_support_router)
