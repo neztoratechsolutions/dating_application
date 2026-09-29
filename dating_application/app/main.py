@@ -34,6 +34,7 @@ from app.routes.count import router as count_router
 from app.routes.favorite import router as favorite_router
 from app.routes.quick_pack import router as quick_pack_router
 from app.routes.help_support import router as help_support
+from app.routes.creator_dashboard import router as creator_dashboard_router
 # from app.routes.admin_dashboard import router as admin_dashboard_router
 
 Base.metadata.create_all(bind=engine)
@@ -72,6 +73,7 @@ app.include_router(count_router)
 app.include_router(favorite_router)
 app.include_router(quick_pack_router)
 app.include_router(help_support)
+app.include_router(creator_dashboard_router)
 # app.include_router(admin_dashboard_router)
 
 

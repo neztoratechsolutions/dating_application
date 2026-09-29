@@ -112,8 +112,11 @@ class ChatMessage(Base):
         default="text"
     )
 
-    metadata = Column(JSONB, nullable=True)
-
+    message_metadata = Column(
+    "metadata",
+    JSONB,
+    nullable=True
+)
     is_read = Column(Boolean, default=False)
 
     is_delivered = Column(Boolean, default=False)
