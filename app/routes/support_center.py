@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from models.support_center import SupportTicket, SupportTicketMessage
+from models.users import User
 
 
 router = APIRouter(
@@ -54,6 +55,22 @@ def create_support_ticket(
     data: SupportTicketCreate,
     db: Session = Depends(get_db)
 ):
+
+    # -----------------------------------------------------
+    # CHECK USER EXISTS
+    # -----------------------------------------------------
+
+    user = (
+        db.query(User)
+        .filter(User.id == data.user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
 
     allowed_categories = [
         "Account",
@@ -360,9 +377,3 @@ def delete_support_ticket(
         "message": "Support ticket deleted successfully",
         "ticket_id": ticket_id
     }
-
-
-
-
-
-
