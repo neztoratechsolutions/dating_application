@@ -88,7 +88,7 @@ from routes.gift_revenue import router as gift_revenue_router
 from routes.help_support import router as help_support_router
 from routes.support_center import router as support_center_router
 from routes.support_admin import router as support_admin_router
-
+from routes.admin_dashboard import router as admin_dashboard_router
 
 
 
@@ -164,3 +164,4 @@ app.include_router(gift_revenue_router)
 app.include_router(help_support_router)
 app.include_router(support_center_router)
 app.include_router(support_admin_router)
+app.include_router(admin_dashboard_router)
