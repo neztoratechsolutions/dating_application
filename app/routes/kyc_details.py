@@ -61,6 +61,7 @@ os.makedirs(
 ALLOWED_DOCUMENT_STATUS = {
     "Pending",
     "Under Review",
+    "Approved",
     "Verified",
     "Rejected",
     "Re-upload"
