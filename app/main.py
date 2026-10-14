@@ -47,6 +47,7 @@ from models.kyc_detail import KYCDetail
 from models.earnings import Earning
 from models.gift_revenue import GiftRevenue
 from models.help_support import HelpSupport
+from models.withdrawals import Withdrawal
 
 
 from routes.users import router as user_router
@@ -91,6 +92,7 @@ from routes.support_admin import router as support_admin_router
 from routes.admin_dashboard import router as admin_dashboard_router
 from routes.creator_dashboard import router as creator_dashboard_router
 from routes.analytics import router as analytics_router
+from routes.withdrawals import router as withdrawal_router
 
 
 
@@ -169,3 +171,4 @@ app.include_router(support_admin_router)
 app.include_router(admin_dashboard_router)
 app.include_router(creator_dashboard_router)
 app.include_router(analytics_router)
+app.include_router(withdrawal_router)
