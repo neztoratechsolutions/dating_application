@@ -71,7 +71,11 @@ class Chat(Base):
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
     chat_id = Column(
         Integer,
@@ -91,9 +95,15 @@ class ChatMessage(Base):
         nullable=False
     )
 
-    message = Column(Text, nullable=True)
+    message = Column(
+        Text,
+        nullable=True
+    )
 
-    attachment = Column(String(255), nullable=True)
+    attachment = Column(
+        String(255),
+        nullable=True
+    )
 
     message_type = Column(
         Enum(
@@ -112,13 +122,26 @@ class ChatMessage(Base):
         default="text"
     )
 
-    metadata = Column(JSONB, nullable=True)
+    message_metadata = Column(
+        "metadata",
+        JSONB,
+        nullable=True
+    )
 
-    is_read = Column(Boolean, default=False)
+    is_read = Column(
+        Boolean,
+        default=False
+    )
 
-    is_delivered = Column(Boolean, default=False)
+    is_delivered = Column(
+        Boolean,
+        default=False
+    )
 
-    is_deleted = Column(Boolean, default=False)
+    is_deleted = Column(
+        Boolean,
+        default=False
+    )
 
     reply_message_id = Column(
         Integer,
