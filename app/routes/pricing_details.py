@@ -16,17 +16,19 @@ def get_db():
     finally:
         db.close()
 
-
 @router.post(
     "/",
     response_model=PricingDetailResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_200_OK
 )
-def create_pricing_detail(
+def create_or_update_pricing_detail(
     data: PricingDetailCreate,
     db: Session = Depends(get_db)
 ):
 
+    # --------------------------------------------------
+    # Check User
+    # --------------------------------------------------
     user = db.query(User).filter(
         User.id == data.user_id
     ).first()
@@ -37,23 +39,83 @@ def create_pricing_detail(
             detail="User not found"
         )
 
-    existing = db.query(PricingDetail).filter(
+    # --------------------------------------------------
+    # Check Existing Pricing
+    # --------------------------------------------------
+    pricing = db.query(PricingDetail).filter(
         PricingDetail.user_id == data.user_id
     ).first()
 
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Pricing detail already exists for this user"
-        )
+    # --------------------------------------------------
+    # If pricing already exists -> UPDATE
+    # --------------------------------------------------
+    if pricing:
 
-    pricing = PricingDetail(**data.model_dump())
+        pricing.chat_amount = data.chat_amount
+        pricing.voice_call_amount = data.voice_call_amount
+        pricing.video_call_amount = data.video_call_amount
+
+        # updated_at will be automatically updated
+        # because the model has:
+        # onupdate=func.now()
+
+        db.commit()
+        db.refresh(pricing)
+
+        return pricing
+
+    # --------------------------------------------------
+    # If pricing does not exist -> CREATE
+    # --------------------------------------------------
+    pricing = PricingDetail(
+        user_id=data.user_id,
+        chat_amount=data.chat_amount,
+        voice_call_amount=data.voice_call_amount,
+        video_call_amount=data.video_call_amount
+    )
 
     db.add(pricing)
     db.commit()
     db.refresh(pricing)
 
     return pricing
+# @router.post(
+#     "/",
+#     response_model=PricingDetailResponse,
+#     status_code=status.HTTP_201_CREATED
+# )
+# def create_pricing_detail(
+#     data: PricingDetailCreate,
+#     db: Session = Depends(get_db)
+# ):
+
+#     user = db.query(User).filter(
+#         User.id == data.user_id
+#     ).first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+
+#     existing = db.query(PricingDetail).filter(
+#         PricingDetail.user_id == data.user_id
+#     ).first()
+
+#     if existing:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Pricing detail already exists for this user"
+#         )
+
+#     pricing = PricingDetail(**data.model_dump())
+
+#     db.add(pricing)
+#     db.commit()
+#     db.refresh(pricing)
+
+#     return pricing
 
 
 @router.get(
