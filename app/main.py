@@ -102,6 +102,8 @@ from routes.games import router as game_router
 from routes.admin_games import router as admin_games_router
 from routes.vvadmin import router as voice_dashboard_router
 from routes.vvadmin import video_dashboard_router
+from routes.leaderboard import router as leaderboard_router
+
 
 
 
@@ -185,3 +187,4 @@ app.include_router(game_router)
 app.include_router(admin_games_router)
 app.include_router(voice_dashboard_router)
 app.include_router(video_dashboard_router)
+app.include_router(leaderboard_router)
