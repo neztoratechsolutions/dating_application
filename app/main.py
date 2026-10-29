@@ -44,7 +44,12 @@ from models.video_call import VideoCall
 from models.wallet import Wallet
 from models.kyc_detail import KYCDetail
 
-
+from models.gift_details import GiftDetail
+from models.game_details import (
+    GameSetting,
+    GamePaymentDetail,
+    GamePlay,
+)
 from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
 
@@ -73,13 +78,19 @@ from routes.app_setting import router as app_setting_router
 from routes.state import router as state_router
 from routes.gift_master import router as gift_router
 from routes.voice_call import router as voice_call_router
-
+from routes.games import router as game_router
+from routes.admin_games import router as admin_games_router
 from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
 from routes.quick_pack import router as quick_pack_router
 from routes.count import router as count_router
 from routes.helpsupport import router as helpsupport_router
 from routes.favourite import router as favourite_router
+from routes.support_admin import router as support_admin_router
+from routes.websocket_routes import router as websocket_router
+from routes.chat import router as chat_router
+from routes.wallet import router as wallet_router
+from routes.leaderboard import router as leaderboard_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -149,3 +160,10 @@ app.include_router(helpsupport_router)
 app.include_router(kyc_detail_router)
 app.include_router(creator_kyc_router)
 app.include_router(favourite_router)
+app.include_router(support_admin_router)
+app.include_router(websocket_router)
+app.include_router(chat_router)
+app.include_router(game_router)
+app.include_router(admin_games_router)
+app.include_router(wallet_router)
+app.include_router(leaderboard_router)

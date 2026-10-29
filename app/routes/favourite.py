@@ -86,12 +86,12 @@ def add_favourite(
     response_model=list[FavoriteResponse]
 )
 def get_favorite_creators(
-    customer_id : int,
+    customer_id: int,
     db: Session = Depends(get_db)
 ):
     # Check customer
     customer = db.query(User).filter(
-        User.id == customer_id ,
+        User.id == customer_id,
         User.role == "customer"
     ).first()
 
@@ -101,8 +101,29 @@ def get_favorite_creators(
             detail="Customer not found"
         )
 
-    favorites = db.query(Favorite).filter(
-        Favorite.customer_id == customer_id
-    ).all()
+    favorites = (
+        db.query(
+            Favorite,
+            User.display_name.label("creator_name"),
+            User.profile_photo.label("profile_image")
+        )
+        .join(
+            User,
+            User.id == Favorite.creator_id
+        )
+        .filter(
+            Favorite.customer_id == customer_id
+        )
+        .all()
+    )
 
-    return favorites
+    return [
+        FavoriteResponse(
+            id=favorite.id,
+            customer_id=favorite.customer_id,
+            creator_id=favorite.creator_id,
+            creator_name=creator_name,
+            profile_image=profile_image
+        )
+        for favorite, creator_name, profile_image in favorites
+    ]
