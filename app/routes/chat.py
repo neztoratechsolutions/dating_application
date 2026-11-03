@@ -800,3 +800,287 @@ async def process_websocket_message(
         "chat_id": chat_id,
         "message_id": payload["message_id"],
     })
+
+
+import os
+import uuid
+from pathlib import Path
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+    Form,
+    status,
+)
+
+router = APIRouter(
+    prefix="/chat",
+    tags=["Chat"]
+)
+
+# =========================================
+# IMAGE UPLOAD CONFIGURATION
+# =========================================
+
+UPLOAD_DIR = Path("uploads/chat_images")
+
+UPLOAD_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+# =========================================
+# SEND IMAGE MESSAGE
+# =========================================
+
+@router.post(
+    "/{chat_id}/send-image",
+    status_code=status.HTTP_201_CREATED
+)
+async def send_image_message(
+    chat_id: int,
+
+    sender_id: int = Form(...),
+
+    image: UploadFile = File(...),
+
+    db: Session = Depends(get_db),
+):
+
+    # =====================================
+    # 1. VALIDATE CHAT
+    # =====================================
+
+    chat = db.query(Chat).filter(
+        Chat.id == chat_id,
+        Chat.status == True
+    ).first()
+
+    if not chat:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Chat not found"
+        )
+
+    # =====================================
+    # 2. VALIDATE CHAT PARTICIPANT
+    # =====================================
+
+    if sender_id not in [
+        chat.user_one_id,
+        chat.user_two_id
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a participant in this chat"
+        )
+
+    # =====================================
+    # 3. DETERMINE RECEIVER
+    # =====================================
+
+    if sender_id == chat.user_one_id:
+
+        receiver_id = chat.user_two_id
+
+    else:
+
+        receiver_id = chat.user_one_id
+
+    # =====================================
+    # 4. VALIDATE USERS
+    # =====================================
+
+    sender = db.query(User).filter(
+        User.id == sender_id
+    ).first()
+
+    receiver = db.query(User).filter(
+        User.id == receiver_id
+    ).first()
+
+    if not sender or not receiver:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Sender or receiver not found"
+        )
+
+    # =====================================
+    # 5. VALIDATE IMAGE TYPE
+    # =====================================
+
+    content_type = image.content_type
+
+    if content_type not in ALLOWED_IMAGE_TYPES:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, PNG and WEBP images are allowed"
+        )
+
+    # =====================================
+    # 6. READ IMAGE
+    # =====================================
+
+    image_data = await image.read(
+        MAX_IMAGE_SIZE + 1
+    )
+
+    if not image_data:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Image is empty"
+        )
+
+    if len(image_data) > MAX_IMAGE_SIZE:
+
+        raise HTTPException(
+            status_code=413,
+            detail="Image size must not exceed 5 MB"
+        )
+
+    # =====================================
+    # 7. GENERATE UNIQUE IMAGE NAME
+    # =====================================
+
+    extension = ALLOWED_IMAGE_TYPES[content_type]
+
+    image_name = (
+        f"chat_{chat_id}_{uuid.uuid4().hex}{extension}"
+    )
+
+    image_path = UPLOAD_DIR / image_name
+
+    # =====================================
+    # 8. SAVE IMAGE
+    # =====================================
+
+    try:
+
+        with open(image_path, "wb") as file:
+
+            file.write(image_data)
+
+        # =================================
+        # 9. SAVE CHAT MESSAGE
+        # =================================
+
+        message = ChatMessage(
+
+            chat_id=chat_id,
+
+            sender_id=sender_id,
+
+            receiver_id=receiver_id,
+
+            message=None,
+
+            attachment=f"/uploads/chat_images/{image_name}",
+
+            message_type="image",
+
+            is_read=False,
+
+            is_delivered=False,
+
+        )
+
+        db.add(message)
+
+        # =================================
+        # 10. UPDATE CHAT LAST MESSAGE
+        # =================================
+
+        chat.last_message = "📷 Image"
+
+        chat.last_message_by = sender_id
+
+        # SQLAlchemy server default timestamps
+        # will be applied when inserting.
+
+        # =================================
+        # 11. UPDATE UNREAD COUNT
+        # =================================
+
+        if receiver_id == chat.user_one_id:
+
+            chat.unread_count_user1 = (
+                (chat.unread_count_user1 or 0) + 1
+            )
+
+        else:
+
+            chat.unread_count_user2 = (
+                (chat.unread_count_user2 or 0) + 1
+            )
+
+        db.commit()
+
+        db.refresh(message)
+
+        # =================================
+        # 12. RESPONSE
+        # =================================
+
+        return {
+
+            "success": True,
+
+            "message": "Image sent successfully",
+
+            "data": {
+
+                "id": message.id,
+
+                "chat_id": message.chat_id,
+
+                "sender_id": message.sender_id,
+
+                "receiver_id": message.receiver_id,
+
+                "message": message.message,
+
+                "attachment": message.attachment,
+
+                "message_type": message.message_type,
+
+                "is_read": message.is_read,
+
+                "is_delivered": message.is_delivered,
+
+                "created_at": message.created_at,
+
+            }
+
+        }
+
+    except Exception:
+
+        db.rollback()
+
+        # Remove uploaded image if database operation fails.
+
+        if image_path.exists():
+
+            image_path.unlink()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send image message"
+        )
