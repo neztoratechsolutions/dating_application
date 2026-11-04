@@ -7,7 +7,7 @@ from database import engine, Base
 
 from models.users import User
 from models.pricing_details import PricingDetail
-
+from models.earnings import Earning
 from models.user_status import UserStatus
 from models.gallery import Gallery
 from models.review import Review
@@ -52,7 +52,7 @@ from models.game_details import (
 )
 from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
-
+from models.creator_verify import CreatorVerification
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
 from routes.auth import router as auth_router
@@ -61,7 +61,7 @@ from routes.gallery import router as gallery_router
 from routes.review import router as review_router
 from routes.settings import router as setting_router
 from routes.gift_details import router as giftdetails_router
-
+from routes.creator_verify import router as creator_verify_router
 from routes.follow_detail import router as followers_router
 from routes.ad_settings import router as adsettings_router
 from routes.tags import router as tags_router
@@ -91,6 +91,7 @@ from routes.websocket_routes import router as websocket_router
 from routes.chat import router as chat_router
 from routes.wallet import router as wallet_router
 from routes.leaderboard import router as leaderboard_router
+from routes.earnings import router as earnings_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -167,3 +168,5 @@ app.include_router(game_router)
 app.include_router(admin_games_router)
 app.include_router(wallet_router)
 app.include_router(leaderboard_router)
+app.include_router(creator_verify_router)
+app.include_router(earnings_router)
