@@ -8,18 +8,20 @@ from schemas.settings import SettingCreate, SettingResponse
 
 router = APIRouter(prefix="/settings",tags=["Settings"])
 
-
 @router.post(
     "/",
     response_model=SettingResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_200_OK
 )
-def create_setting(
+def create_or_update_setting(
     setting: SettingCreate,
     user_id: int,
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    # Check user
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if not user:
         raise HTTPException(
@@ -27,18 +29,27 @@ def create_setting(
             detail="User not found"
         )
 
+    # Check existing setting
     existing_setting = (
         db.query(Setting)
         .filter(Setting.user_id == user_id)
         .first()
     )
 
+    # If setting already exists -> UPDATE
     if existing_setting:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Setting already exists for this user"
-        )
 
+        existing_setting.availability_hour = setting.availability_hour
+
+        # updated_at will be updated automatically
+        # if your model has onupdate=func.now()
+
+        db.commit()
+        db.refresh(existing_setting)
+
+        return existing_setting
+
+    # If setting doesn't exist -> CREATE
     new_setting = Setting(
         user_id=user_id,
         availability_hour=setting.availability_hour
@@ -49,6 +60,46 @@ def create_setting(
     db.refresh(new_setting)
 
     return new_setting
+# @router.post(
+#     "/",
+#     response_model=SettingResponse,
+#     status_code=status.HTTP_201_CREATED
+# )
+# def create_setting(
+#     setting: SettingCreate,
+#     user_id: int,
+#     db: Session = Depends(get_db)
+# ):
+#     user = db.query(User).filter(User.id == user_id).first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+
+#     existing_setting = (
+#         db.query(Setting)
+#         .filter(Setting.user_id == user_id)
+#         .first()
+#     )
+
+#     if existing_setting:
+#         raise HTTPException(
+#             status_code=status.HTTP_409_CONFLICT,
+#             detail="Setting already exists for this user"
+#         )
+
+#     new_setting = Setting(
+#         user_id=user_id,
+#         availability_hour=setting.availability_hour
+#     )
+
+#     db.add(new_setting)
+#     db.commit()
+#     db.refresh(new_setting)
+
+#     return new_setting
 
 
 @router.get(
