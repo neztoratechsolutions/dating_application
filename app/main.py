@@ -54,6 +54,7 @@ from models.game_details import (
     GamePlay,
 )
 from models.creator_verify import CreatorVerification
+from models.customer_settings import CustomerSettings
 
 
 from routes.users import router as user_router
@@ -105,6 +106,7 @@ from routes.vvadmin import router as voice_dashboard_router
 from routes.vvadmin import video_dashboard_router
 from routes.leaderboard import router as leaderboard_router
 from routes.creator_verify import router as creator_verify_router
+from routes.customer_settings import router as customer_settings_router
 
 
 
@@ -190,3 +192,4 @@ app.include_router(voice_dashboard_router)
 app.include_router(video_dashboard_router)
 app.include_router(leaderboard_router)
 app.include_router(creator_verify_router)
+app.include_router(customer_settings_router)
