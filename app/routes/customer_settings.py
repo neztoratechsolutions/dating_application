@@ -12,7 +12,7 @@ from schemas.customer_settings import (
 )
 
 router = APIRouter(
-    prefix="/settings",
+    prefix="/Customer-settings",
     tags=["Customer Settings"]
 )
 
