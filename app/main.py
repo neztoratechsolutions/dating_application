@@ -29,6 +29,7 @@ from models.app_setting import AppSetting
 from models.state import State
 from models.gift_master import GiftMaster
 from models.voice_call import VoiceCall
+from models.customer_settings import CustomerSettings
 from models.chat_history import (
     Chat,
     ChatMessage,
@@ -92,6 +93,9 @@ from routes.chat import router as chat_router
 from routes.wallet import router as wallet_router
 from routes.leaderboard import router as leaderboard_router
 from routes.earnings import router as earnings_router
+from routes.customer_settings import router as customer_settings_router
+from routes.creator_dashboard import router as creator_dashboard_router
+from models.withdraw import WithdrawalRequest
 Base.metadata.create_all(bind=engine)
 
 
@@ -170,3 +174,5 @@ app.include_router(wallet_router)
 app.include_router(leaderboard_router)
 app.include_router(creator_verify_router)
 app.include_router(earnings_router)
+app.include_router(customer_settings_router)
+app.include_router(creator_dashboard_router)
