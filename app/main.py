@@ -96,6 +96,7 @@ from routes.earnings import router as earnings_router
 from routes.customer_settings import router as customer_settings_router
 from routes.creator_dashboard import router as creator_dashboard_router
 from models.withdraw import WithdrawalRequest
+from routes.gift_history import router as gift_history_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -176,3 +177,4 @@ app.include_router(creator_verify_router)
 app.include_router(earnings_router)
 app.include_router(customer_settings_router)
 app.include_router(creator_dashboard_router)
+app.include_router(gift_history_router)

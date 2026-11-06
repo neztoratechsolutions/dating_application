@@ -232,7 +232,7 @@ from datetime import datetime, timezone
 from database import SessionLocal
 from models.earnings import Earning
 from models.withdraw import WithdrawalRequest
-
+from models.gift_details import GiftDetail
 
 router = APIRouter(
     prefix="/earnings",
@@ -257,23 +257,58 @@ def get_db():
 # GET USER EARNINGS AND WITHDRAWAL HISTORY
 # --------------------------------------------------
 
+
 @router.get("/{user_id}")
 def get_earnings(
     user_id: int,
     db: Session = Depends(get_db)
 ):
 
+    # --------------------------------------------------
+    # GET USER EARNINGS
+    # --------------------------------------------------
+
     earning = (
         db.query(Earning)
-        .filter(Earning.user_id == user_id)
+        .filter(
+            Earning.user_id == user_id
+        )
         .first()
     )
 
     if not earning:
+
         raise HTTPException(
             status_code=404,
             detail="Earnings record not found"
         )
+
+    # --------------------------------------------------
+    # GET GIFT EARNINGS
+    # GiftDetail.user_id = Creator ID
+    # GiftDetail.earnings = Creator gift earnings
+    # --------------------------------------------------
+
+    gift_earnings = (
+        db.query(
+            func.coalesce(
+                func.sum(GiftDetail.earnings),
+                0
+            )
+        )
+        .filter(
+            GiftDetail.user_id == user_id
+        )
+        .scalar()
+    )
+
+    gift_earnings = Decimal(
+        str(gift_earnings or 0)
+    )
+
+    # --------------------------------------------------
+    # GET WITHDRAWAL HISTORY
+    # --------------------------------------------------
 
     withdrawal_requests = (
         db.query(WithdrawalRequest)
@@ -291,40 +326,78 @@ def get_earnings(
     for request in withdrawal_requests:
 
         withdrawal_history.append({
+
             "withdrawal_id": request.id,
+
             "user_id": request.user_id,
-            "requested_amount": float(request.amount),
+
+            "requested_amount": float(
+                request.amount or 0
+            ),
+
             "status": request.status,
+
             "requested_at": (
                 request.requested_at.isoformat()
                 if request.requested_at
                 else None
             ),
+
             "approved_at": (
                 request.approved_at.isoformat()
                 if request.approved_at
                 else None
             ),
+
             "rejected_at": (
                 request.rejected_at.isoformat()
                 if request.rejected_at
                 else None
             )
+
         })
 
+    # --------------------------------------------------
+    # RESPONSE
+    # --------------------------------------------------
+
     return {
-        "user_id": user_id,
-        "total_earned": float(
-            earning.total_earned or 0
-        ),
-        "withdrawal_amount": float(
-            earning.withdrawal_amount or 0
-        ),
-        "available_payout": float(
-            earning.balance or 0
-        ),
-        "withdrawal_history": withdrawal_history
+
+        "status_code": 200,
+
+        "message": "Earnings fetched successfully",
+
+        "data": {
+
+            "user_id": user_id,
+
+            # Existing total earnings
+            "total_earned": float(
+                earning.total_earned or 0
+            ),
+
+            # Total earnings from gifts received
+            "gift_earnings": float(
+                gift_earnings
+            ),
+
+            # Existing withdrawal amount
+            "withdrawal_amount": float(
+                earning.withdrawal_amount or 0
+            ),
+
+            # Existing available payout
+            "available_payout": float(
+                earning.balance or 0
+            ),
+
+            # Withdrawal history
+            "withdrawal_history": withdrawal_history
+
+        }
+
     }
+
 
 
 # --------------------------------------------------
