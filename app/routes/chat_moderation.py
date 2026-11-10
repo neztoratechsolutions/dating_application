@@ -15,7 +15,37 @@ router = APIRouter(
     prefix="/admin/chat-moderation",
     tags=["Admin Chat Moderation"],
 )
+from pathlib import Path
 
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+app = FastAPI()
+
+# ---------------------------------------------------------
+# CHAT IMAGE UPLOAD DIRECTORY
+# ---------------------------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parent
+
+UPLOAD_DIR = BASE_DIR / "uploads"
+
+CHAT_IMAGE_DIR = UPLOAD_DIR / "chat_images"
+
+CHAT_IMAGE_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+# ---------------------------------------------------------
+# SERVE CHAT IMAGES
+# ---------------------------------------------------------
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOAD_DIR)),
+    name="uploads"
+)
 
 # ---------------------------------------------------------
 # Helpers
@@ -561,12 +591,6 @@ def ban_user(
         "message": "Ban action recorded successfully",
         "data": action_data(action),
     }
-
-
-# ---------------------------------------------------------
-# Moderation history
-# GET /admin/chat-moderation/{chat_id}/actions
-# ---------------------------------------------------------
 
 @router.get("/{chat_id}/actions")
 def get_moderation_history(

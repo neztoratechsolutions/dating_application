@@ -103,6 +103,9 @@ from routes.admin_video_call import router as admin_video_call_router
 from routes.admin_dashboard import router as admin_dashboard_router
 from routes.Withdrawal import router as withdrawal_router
 from routes.rewards import router as rewards_router
+from routes.notifications import router as notifications_router
+from routes.admin_voice_call import router as admin_voice_calls_router
+from routes.analytics import router as analytics_router
 from models.referral import Referral
 Base.metadata.create_all(bind=engine)
 
@@ -190,3 +193,6 @@ app.include_router(admin_video_call_router)
 app.include_router(admin_dashboard_router)
 app.include_router(withdrawal_router)
 app.include_router(rewards_router)
+app.include_router(notifications_router)
+app.include_router(admin_voice_calls_router)
+app.include_router(analytics_router)
