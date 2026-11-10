@@ -7,7 +7,7 @@ from database import engine, Base
 
 from models.users import User
 from models.pricing_details import PricingDetail
-
+from models.earnings import Earning
 from models.user_status import UserStatus
 from models.gallery import Gallery
 from models.review import Review
@@ -29,6 +29,7 @@ from models.app_setting import AppSetting
 from models.state import State
 from models.gift_master import GiftMaster
 from models.voice_call import VoiceCall
+from models.customer_settings import CustomerSettings
 from models.chat_history import (
     Chat,
     ChatMessage,
@@ -44,6 +45,7 @@ from models.video_call import VideoCall
 from models.wallet_transaction import WalletTransaction
 from models.wallet import Wallet
 from models.kyc_detail import KYCDetail
+
 from models.earnings import Earning
 from models.gift_revenue import GiftRevenue
 from models.help_support import HelpSupport
@@ -56,7 +58,15 @@ from models.game_details import (
 from models.creator_verify import CreatorVerification
 from models.customer_settings import CustomerSettings
 
-
+from models.gift_details import GiftDetail
+from models.game_details import (
+    GameSetting,
+    GamePaymentDetail,
+    GamePlay,
+)
+from routes.kyc_details import router as kyc_detail_router
+from routes.creator_kyc import router as creator_kyc_router
+from models.creator_verify import CreatorVerification
 from routes.users import router as user_router
 from routes.pricing_details import router as pricing_router
 from routes.auth import router as auth_router
@@ -65,7 +75,7 @@ from routes.gallery import router as gallery_router
 from routes.review import router as review_router
 from routes.settings import router as setting_router
 from routes.gift_details import router as giftdetails_router
-
+from routes.creator_verify import router as creator_verify_router
 from routes.follow_detail import router as followers_router
 from routes.ad_settings import router as adsettings_router
 from routes.tags import router as tags_router
@@ -82,7 +92,8 @@ from routes.app_setting import router as app_setting_router
 from routes.state import router as state_router
 from routes.gift_master import router as gift_router
 from routes.voice_call import router as voice_call_router
-
+from routes.games import router as game_router
+from routes.admin_games import router as admin_games_router
 from routes.video_call import router as video_call_router
 from routes.customer import router as customer_router
 
@@ -109,6 +120,28 @@ from routes.creator_verify import router as creator_verify_router
 from routes.customer_settings import router as customer_settings_router
 
 
+
+
+from routes.count import router as count_router
+from routes.helpsupport import router as helpsupport_router
+from routes.favourite import router as favourite_router
+from routes.support_admin import router as support_admin_router
+from routes.websocket_routes import router as websocket_router
+from routes.chat import router as chat_router
+from routes.wallet import router as wallet_router
+from routes.leaderboard import router as leaderboard_router
+from routes.earnings import router as earnings_router
+from routes.customer_settings import router as customer_settings_router
+from routes.creator_dashboard import router as creator_dashboard_router
+from models.withdraw import WithdrawalRequest
+from models.Withdrawal import Withdrawal
+from routes.gift_history import router as gift_history_router
+from routes.chat_moderation import router as chat_moderation_router
+from routes.admin_video_call import router as admin_video_call_router
+from routes.admin_dashboard import router as admin_dashboard_router
+from routes.Withdrawal import router as withdrawal_router
+from routes.rewards import router as rewards_router
+from models.referral import Referral
 
 Base.metadata.create_all(bind=engine)
 
@@ -174,6 +207,7 @@ app.include_router(app_setting_router)
 app.include_router(voice_call_router)
 app.include_router(video_call_router)
 app.include_router(customer_router)
+
 app.include_router(wallet_router)
 app.include_router(kyc_detail_router)
 app.include_router(creator_kyc_router)
@@ -193,3 +227,26 @@ app.include_router(video_dashboard_router)
 app.include_router(leaderboard_router)
 app.include_router(creator_verify_router)
 app.include_router(customer_settings_router)
+app.include_router(count_router)
+app.include_router(helpsupport_router)
+app.include_router(kyc_detail_router)
+app.include_router(creator_kyc_router)
+app.include_router(favourite_router)
+app.include_router(support_admin_router)
+app.include_router(websocket_router)
+app.include_router(chat_router)
+app.include_router(game_router)
+app.include_router(admin_games_router)
+app.include_router(wallet_router)
+app.include_router(leaderboard_router)
+app.include_router(creator_verify_router)
+app.include_router(earnings_router)
+app.include_router(customer_settings_router)
+app.include_router(creator_dashboard_router)
+app.include_router(gift_history_router)
+app.include_router(chat_moderation_router)
+app.include_router(admin_video_call_router)
+app.include_router(admin_dashboard_router)
+app.include_router(withdrawal_router)
+app.include_router(rewards_router)
+

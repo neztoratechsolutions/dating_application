@@ -9,9 +9,12 @@ from pydantic import BaseModel, ConfigDict
 # INITIATE VIDEO CALL
 # ==========================================================
 
-class VideoCallInitiate(BaseModel):
-    caller_id: int
-    receiver_id: int
+from pydantic import BaseModel, Field
+
+
+class VideoCallInitiateRequest(BaseModel):
+    caller_id: int = Field(..., gt=0)
+    receiver_id: int = Field(..., gt=0)
 
 
 # ==========================================================

@@ -15,10 +15,6 @@ class GiftMaster(Base):
 
     coins = Column(Integer, nullable=False)
 
-    creator_revenue = Column(DECIMAL(10, 2), nullable=False)
-
-    platform_revenue = Column(DECIMAL(10, 2), nullable=False)
-
     status = Column(Boolean, default=True)
 
     created_at = Column(
@@ -31,3 +27,4 @@ class GiftMaster(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+

@@ -27,7 +27,7 @@ from models.kyc_detail import KYCDetail, CreatorKYC
 from models.users import User
 from models.state import State
 
-from app.schemas.kyc_details import (
+from schemas.kyc_details import (
     KYCResponse,
     KYCAdminResponse,
     KYCDocumentStatusUpdate,
@@ -61,7 +61,6 @@ os.makedirs(
 ALLOWED_DOCUMENT_STATUS = {
     "Pending",
     "Under Review",
-    "Approved",
     "Verified",
     "Rejected",
     "Re-upload"

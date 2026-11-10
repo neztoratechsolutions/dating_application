@@ -2,7 +2,7 @@ from enum import Enum
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 
 
 # =========================
@@ -39,11 +39,12 @@ class SupportStatus(str, Enum):
 # =========================
 
 class SupportTicketCreate(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=255)
+    category: str
+    priority: str = "Medium"
+    message: str = Field(..., min_length=1)
+    attachment: Optional[str] = None
     user_id: int
-    subject: str
-    category: SupportCategory
-    priority: SupportPriority = SupportPriority.MEDIUM
-
 
 # =========================
 # UPDATE

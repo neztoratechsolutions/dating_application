@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-
+from datetime import datetime
 from database import SessionLocal
 from models.support_center import SupportTicket, SupportTicketMessage
 from models.users import User
-
+from schemas.support_ticket import SupportTicketResponse,SupportTicketCreate
+from auth import get_current_user
 
 router = APIRouter(
     prefix="/support",
@@ -37,7 +38,263 @@ class AdminSupportTicketUpdate(BaseModel):
 # =========================================================
 # ADMIN - UPDATE PRIORITY / STATUS
 # =========================================================
+# @router.post(
+#     "/tickets/",
+#     status_code=status.HTTP_201_CREATED
+# )
+# def create_support_ticket(
+#     data: SupportTicketCreate,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
 
+#     allowed_categories = [
+#         "Account",
+#         "Payment",
+#         "KYC",
+#         "Chat",
+#         "Call",
+#         "Withdrawal",
+#         "Report User",
+#         "Other"
+#     ]
+
+#     allowed_priorities = [
+#         "Low",
+#         "Medium",
+#         "High",
+#         "Urgent"
+#     ]
+
+#     # -----------------------------------------------------
+#     # CATEGORY VALIDATION
+#     # -----------------------------------------------------
+
+#     if data.category not in allowed_categories:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=f"Invalid category. Allowed values: {allowed_categories}"
+#         )
+
+#     # -----------------------------------------------------
+#     # PRIORITY VALIDATION
+#     # -----------------------------------------------------
+
+#     if data.priority not in allowed_priorities:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=f"Invalid priority. Allowed values: {allowed_priorities}"
+#         )
+
+#     # -----------------------------------------------------
+#     # GENERATE TICKET ID
+#     # -----------------------------------------------------
+
+#     today = datetime.now().strftime("%Y%m%d")
+
+#     last_ticket = (
+#         db.query(SupportTicket)
+#         .order_by(SupportTicket.id.desc())
+#         .first()
+#     )
+
+#     if last_ticket:
+#         sequence = last_ticket.id + 1
+#     else:
+#         sequence = 1
+
+#     ticket_id = f"TKT-{today}-{sequence:03d}"
+
+#     # -----------------------------------------------------
+#     # CREATE SUPPORT TICKET
+#     # -----------------------------------------------------
+
+#     ticket = SupportTicket(
+#         ticket_id=ticket_id,
+#         user_id=current_user.id,
+#         subject=data.subject,
+#         category=data.category,
+#         priority=data.priority,
+#         status="Open"
+#     )
+
+#     db.add(ticket)
+#     db.flush()
+
+#     # -----------------------------------------------------
+#     # CREATE FIRST MESSAGE
+#     # -----------------------------------------------------
+
+#     ticket_message = SupportTicketMessage(
+#         ticket_id=ticket.id,
+#         sender_id=current_user.id,
+#         message=data.message,
+#         attachment=data.attachment,
+#         is_admin=False
+#     )
+
+#     db.add(ticket_message)
+
+#     # -----------------------------------------------------
+#     # COMMIT
+#     # -----------------------------------------------------
+
+#     db.commit()
+#     db.refresh(ticket)
+
+#     return {
+#         "status_code": 201,
+#         "message": "Support ticket created successfully",
+#         "data": {
+#             "id": ticket.id,
+#             "ticket_id": ticket.ticket_id,
+#             "user_id": ticket.user_id,
+#             "subject": ticket.subject,
+#             "category": ticket.category,
+#             "priority": ticket.priority,
+#             "status": ticket.status,
+#             "created_at": ticket.created_at,
+#             "updated_at": ticket.updated_at
+#         }
+#     }
+@router.post(
+    "/tickets/",
+    status_code=status.HTTP_201_CREATED
+)
+def create_support_ticket(
+    data: SupportTicketCreate,
+    db: Session = Depends(get_db)
+):
+
+    # -----------------------------------------------------
+    # CHECK USER
+    # -----------------------------------------------------
+
+    user = db.query(User).filter(
+        User.id == data.user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # -----------------------------------------------------
+    # CATEGORY VALIDATION
+    # -----------------------------------------------------
+
+    allowed_categories = [
+        "Account",
+        "Payment",
+        "KYC",
+        "Chat",
+        "Call",
+        "Withdrawal",
+        "Report User",
+        "Other"
+    ]
+
+    if data.category not in allowed_categories:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid category. Allowed values: {allowed_categories}"
+        )
+
+    # -----------------------------------------------------
+    # PRIORITY VALIDATION
+    # -----------------------------------------------------
+
+    allowed_priorities = [
+        "Low",
+        "Medium",
+        "High",
+        "Urgent"
+    ]
+
+    if data.priority not in allowed_priorities:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid priority. Allowed values: {allowed_priorities}"
+        )
+
+    # -----------------------------------------------------
+    # GENERATE TICKET ID
+    # -----------------------------------------------------
+
+    today = datetime.now().strftime("%Y%m%d")
+
+    last_ticket = (
+        db.query(SupportTicket)
+        .order_by(SupportTicket.id.desc())
+        .first()
+    )
+
+    if last_ticket:
+        sequence = last_ticket.id + 1
+    else:
+        sequence = 1
+
+    ticket_id = f"TKT-{today}-{sequence:03d}"
+
+    # -----------------------------------------------------
+    # CREATE SUPPORT TICKET
+    # -----------------------------------------------------
+
+    ticket = SupportTicket(
+        ticket_id=ticket_id,
+        user_id=data.user_id,
+        subject=data.subject,
+        category=data.category,
+        priority=data.priority,
+        status="Open"
+    )
+
+    db.add(ticket)
+    db.flush()
+
+    # -----------------------------------------------------
+    # CREATE FIRST MESSAGE
+    # -----------------------------------------------------
+
+    ticket_message = SupportTicketMessage(
+        ticket_id=ticket.id,
+        sender_id=data.user_id,
+        message=data.message,
+        attachment=data.attachment,
+        is_admin=False
+    )
+
+    db.add(ticket_message)
+
+    # -----------------------------------------------------
+    # COMMIT
+    # -----------------------------------------------------
+
+    db.commit()
+    db.refresh(ticket)
+
+    # -----------------------------------------------------
+    # RESPONSE
+    # -----------------------------------------------------
+
+    return {
+        "status_code": 201,
+        "message": "Support ticket created successfully",
+        "data": {
+            "id": ticket.id,
+            "ticket_id": ticket.ticket_id,
+            "user_id": ticket.user_id,
+            "user_name": user.display_name,
+            "profile_image": user.profile_photo,
+            "subject": ticket.subject,
+            "category": ticket.category,
+            "priority": ticket.priority,
+            "status": ticket.status,
+            "created_at": ticket.created_at,
+            "updated_at": ticket.updated_at
+        }
+    }
 @router.put("/admin/tickets/{ticket_id}")
 def admin_update_support_ticket(
     ticket_id: str,
@@ -131,7 +388,15 @@ def admin_get_all_support_tickets(
 ):
 
     tickets = (
-        db.query(SupportTicket)
+        db.query(
+            SupportTicket,
+            User.display_name,
+            User.phone
+        )
+        .join(
+            User,
+            User.id == SupportTicket.user_id
+        )
         .order_by(SupportTicket.id.desc())
         .all()
     )
@@ -149,7 +414,13 @@ def admin_get_all_support_tickets(
             {
                 "id": ticket.id,
                 "ticket_id": ticket.ticket_id,
+
+                # User details
                 "user_id": ticket.user_id,
+                "user_name": display_name,
+                "user_phone": phone,
+
+                # Ticket details
                 "subject": ticket.subject,
                 "category": ticket.category,
                 "priority": ticket.priority,
@@ -157,10 +428,9 @@ def admin_get_all_support_tickets(
                 "created_at": ticket.created_at,
                 "updated_at": ticket.updated_at
             }
-            for ticket in tickets
+            for ticket, display_name, phone in tickets
         ]
     }
-
 
 # =========================================================
 # ADMIN - SUPPORT TICKET DASHBOARD
