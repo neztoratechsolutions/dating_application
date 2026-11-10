@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from datetime import datetime
 from typing import Optional
 
@@ -108,7 +107,7 @@ class KYCDashboardSummary(BaseModel):
     approved: int
     rejected: int
     re_upload: int
-=======
+
 from datetime import datetime
 from typing import Optional
 
@@ -218,5 +217,4 @@ class KYCDashboardSummary(BaseModel):
     approved: int
     rejected: int
     re_upload: int
->>>>>>> a0076f66a052f7b0a072081f4a8bf77946030f38
     completed_today: int

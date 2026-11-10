@@ -1,24 +1,20 @@
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import SessionLocal
 
-from models.earnings import Earning
-from models.gift_revenue import GiftRevenue
+from models.voice_call import VoiceCall
+from models.video_call import VideoCall
+from models.gift_details import GiftDetail
+from models.game_details import GamePlay
+from models.chat_history import ChatCallLog
 
 
-router = APIRouter(
-    prefix="/analytics",
-    tags=["Analytics"]
-)
+router = APIRouter()
 
-
-# =========================================================
-# DATABASE
-# =========================================================
 
 def get_db():
     db = SessionLocal()
@@ -28,169 +24,360 @@ def get_db():
         db.close()
 
 
-# =========================================================
-# PLATFORM PERFORMANCE - MONDAY TO SUNDAY
-# =========================================================
+def convert_amount(value):
+    return float(value or 0)
 
-@router.get("/platform-performance")
+
+@router.get("/analytics/platform-performance")
 def get_platform_performance(
     db: Session = Depends(get_db)
 ):
-    today = datetime.now().date()
+    try:
 
-    monday = today - timedelta(days=today.weekday())
-    next_monday = monday + timedelta(days=7)
+        # =====================================================
+        # CURRENT DATE
+        # =====================================================
 
-    start_datetime = datetime.combine(monday, time.min)
-    end_datetime = datetime.combine(next_monday, time.min)
+        today = datetime.now(timezone.utc).date()
 
-    # -----------------------------------------------------
-    # 1. EARNINGS TABLE
-    # -----------------------------------------------------
+        # Monday -> Sunday
+        week_start = today - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6)
 
-    creator_earnings = (
-        db.query(
-            func.coalesce(
-                func.sum(Earning.total_earned), 0
+        start_datetime = datetime.combine(
+            week_start,
+            datetime.min.time(),
+            tzinfo=timezone.utc
+        )
+
+        end_datetime = datetime.combine(
+            week_end + timedelta(days=1),
+            datetime.min.time(),
+            tzinfo=timezone.utc
+        )
+
+        # =====================================================
+        # 1. VOICE CALL EARNINGS
+        # =====================================================
+
+        voice_results = (
+            db.query(
+                func.date(VoiceCall.created_at).label("earning_date"),
+                func.sum(VoiceCall.revenue).label("total")
             )
+            .filter(
+                VoiceCall.created_at >= start_datetime,
+                VoiceCall.created_at < end_datetime,
+                VoiceCall.status.in_(
+                    ["completed", "ongoing"]
+                )
+            )
+            .group_by(
+                func.date(VoiceCall.created_at)
+            )
+            .all()
         )
-        .scalar()
-    )
 
-    creator_earnings = float(creator_earnings or 0)
+        voice_data = {
+            row.earning_date: convert_amount(row.total)
+            for row in voice_results
+        }
 
-    # -----------------------------------------------------
-    # 2. GIFT REVENUE TABLE - DAILY DATA
-    # -----------------------------------------------------
+        # =====================================================
+        # 2. VIDEO CALL EARNINGS
+        # =====================================================
 
-    gift_results = (
-        db.query(
-            func.date(
-                GiftRevenue.created_at
-            ).label("revenue_date"),
-            func.coalesce(
-                func.sum(GiftRevenue.creator_revenue), 0
-            ).label("creator_revenue"),
-            func.coalesce(
-                func.sum(GiftRevenue.platform_revenue), 0
-            ).label("platform_revenue")
+        video_results = (
+            db.query(
+                func.date(VideoCall.created_at).label("earning_date"),
+                func.sum(VideoCall.revenue).label("total")
+            )
+            .filter(
+                VideoCall.created_at >= start_datetime,
+                VideoCall.created_at < end_datetime,
+                VideoCall.status.in_(
+                    ["completed", "ongoing"]
+                )
+            )
+            .group_by(
+                func.date(VideoCall.created_at)
+            )
+            .all()
         )
-        .filter(
-            GiftRevenue.created_at >= start_datetime,
-            GiftRevenue.created_at < end_datetime
-        )
-        .group_by(
-            func.date(GiftRevenue.created_at)
-        )
-        .all()
-    )
 
-    gift_by_date = {
-        str(row.revenue_date): {
-            "creator_revenue": float(
-                row.creator_revenue or 0
+        video_data = {
+            row.earning_date: convert_amount(row.total)
+            for row in video_results
+        }
+
+        # =====================================================
+        # 3. GIFT EARNINGS
+        # =====================================================
+
+        gift_results = (
+            db.query(
+                func.date(GiftDetail.created_at).label("earning_date"),
+                func.sum(GiftDetail.earnings).label("total")
+            )
+            .filter(
+                GiftDetail.created_at >= start_datetime,
+                GiftDetail.created_at < end_datetime
+            )
+            .group_by(
+                func.date(GiftDetail.created_at)
+            )
+            .all()
+        )
+
+        gift_data = {
+            row.earning_date: convert_amount(row.total)
+            for row in gift_results
+        }
+
+        # =====================================================
+        # 4. GAME EARNINGS
+        #
+        # Players winning earnings
+        # Only WON games are considered
+        # =====================================================
+
+        game_results = (
+            db.query(
+                func.date(GamePlay.completed_at).label("earning_date"),
+                func.sum(GamePlay.prize_coins).label("total")
+            )
+            .filter(
+                GamePlay.completed_at >= start_datetime,
+                GamePlay.completed_at < end_datetime,
+                GamePlay.status == "won",
+                GamePlay.prize_coins > 0
+            )
+            .group_by(
+                func.date(GamePlay.completed_at)
+            )
+            .all()
+        )
+
+        game_data = {
+            row.earning_date: convert_amount(row.total)
+            for row in game_results
+        }
+
+        # =====================================================
+        # 5. CHAT EARNINGS
+        #
+        # ChatCallLog.amount
+        # =====================================================
+
+        chat_results = (
+            db.query(
+                func.date(ChatCallLog.created_at).label("earning_date"),
+                func.sum(ChatCallLog.amount).label("total")
+            )
+            .filter(
+                ChatCallLog.created_at >= start_datetime,
+                ChatCallLog.created_at < end_datetime,
+                ChatCallLog.status == "completed",
+                ChatCallLog.amount > 0
+            )
+            .group_by(
+                func.date(ChatCallLog.created_at)
+            )
+            .all()
+        )
+
+        chat_data = {
+            row.earning_date: convert_amount(row.total)
+            for row in chat_results
+        }
+
+        # =====================================================
+        # DAILY + WEEKLY BREAKDOWN
+        # =====================================================
+
+        daily_breakdown = []
+
+        weekly_voice = 0
+        weekly_video = 0
+        weekly_gift = 0
+        weekly_game = 0
+        weekly_chat = 0
+        weekly_total = 0
+
+        for i in range(7):
+
+            current_date = week_start + timedelta(days=i)
+
+            voice_earnings = voice_data.get(
+                current_date,
+                0
+            )
+
+            video_earnings = video_data.get(
+                current_date,
+                0
+            )
+
+            gift_earnings = gift_data.get(
+                current_date,
+                0
+            )
+
+            game_earnings = game_data.get(
+                current_date,
+                0
+            )
+
+            chat_earnings = chat_data.get(
+                current_date,
+                0
+            )
+
+            # =================================================
+            # TOTAL EARNINGS
+            # =================================================
+
+            total_earnings = (
+                voice_earnings
+                + video_earnings
+                + gift_earnings
+                + game_earnings
+                + chat_earnings
+            )
+
+            daily_breakdown.append({
+                "date": current_date.isoformat(),
+
+                "voice_call_earnings": voice_earnings,
+
+                "video_call_earnings": video_earnings,
+
+                "gift_earnings": gift_earnings,
+
+                "game_earnings": game_earnings,
+
+                "chat_earnings": chat_earnings,
+
+                "total_earnings": total_earnings
+            })
+
+            weekly_voice += voice_earnings
+            weekly_video += video_earnings
+            weekly_gift += gift_earnings
+            weekly_game += game_earnings
+            weekly_chat += chat_earnings
+            weekly_total += total_earnings
+
+        # =====================================================
+        # TODAY'S DATA
+        # =====================================================
+
+        today_voice = voice_data.get(
+            today,
+            0
+        )
+
+        today_video = video_data.get(
+            today,
+            0
+        )
+
+        today_gift = gift_data.get(
+            today,
+            0
+        )
+
+        today_game = game_data.get(
+            today,
+            0
+        )
+
+        today_chat = chat_data.get(
+            today,
+            0
+        )
+
+        today_total = (
+            today_voice
+            + today_video
+            + today_gift
+            + today_game
+            + today_chat
+        )
+
+        daily_data = {
+            "date": today.isoformat(),
+
+            "voice_call_earnings": today_voice,
+
+            "video_call_earnings": today_video,
+
+            "gift_earnings": today_gift,
+
+            "game_earnings": today_game,
+
+            "chat_earnings": today_chat,
+
+            "total_earnings": today_total
+        }
+
+        # =====================================================
+        # FINAL RESPONSE
+        # =====================================================
+
+        return {
+            "status": True,
+
+            "message": (
+                "Platform performance fetched successfully"
             ),
-            "platform_revenue": float(
-                row.platform_revenue or 0
-            )
-        }
-        for row in gift_results
-    }
 
-    # -----------------------------------------------------
-    # 3. WEEKLY BREAKDOWN
-    # -----------------------------------------------------
+            "daily_data": daily_data,
 
-    weekly_data = []
+            "weekly_data": {
 
-    weekly_creator_revenue = 0.0
-    weekly_platform_revenue = 0.0
-
-    for i in range(7):
-        current_date = monday + timedelta(days=i)
-        date_key = current_date.isoformat()
-
-        gift = gift_by_date.get(
-            date_key,
-            {
-                "creator_revenue": 0.0,
-                "platform_revenue": 0.0
-            }
-        )
-
-        creator_revenue = gift["creator_revenue"]
-        platform_revenue = gift["platform_revenue"]
-
-        daily_total = creator_revenue + platform_revenue
-
-        weekly_creator_revenue += creator_revenue
-        weekly_platform_revenue += platform_revenue
-
-        weekly_data.append({
-            "date": date_key,
-            "day": current_date.strftime("%A"),
-            "earnings_table": {
-                "total_earned": round(
-                    creator_earnings, 2
-                )
-            },
-            "gift_revenue_table": {
-                "creator_revenue": round(
-                    creator_revenue, 2
+                "week_start": (
+                    week_start.isoformat()
                 ),
-                "platform_revenue": round(
-                    platform_revenue, 2
-                )
-            },
-            "daily_gift_total": round(
-                daily_total, 2
-            )
-        })
 
-    # -----------------------------------------------------
-    # 4. SUMMARY TOTALS
-    # -----------------------------------------------------
+                "week_end": (
+                    week_end.isoformat()
+                ),
 
-    total_gift_revenue = (
-        weekly_creator_revenue
-        + weekly_platform_revenue
-    )
+                "daily_breakdown": daily_breakdown,
 
-    combined_total = (
-        creator_earnings
-        + total_gift_revenue
-    )
+                "summary": {
 
-    # -----------------------------------------------------
-    # 5. RESPONSE
-    # -----------------------------------------------------
-
-    return {
-        "status_code": 200,
-        "message": "Platform performance retrieved successfully",
-        "data": {
-            "weekly_breakdown": weekly_data,
-            "summary": {
-                "earnings_table": {
-                    "total_earned": round(
-                        creator_earnings, 2
-                    )
-                },
-                "gift_revenue_table": {
-                    "creator_revenue": round(
-                        weekly_creator_revenue, 2
+                    "voice_call_earnings": (
+                        weekly_voice
                     ),
-                    "platform_revenue": round(
-                        weekly_platform_revenue, 2
+
+                    "video_call_earnings": (
+                        weekly_video
+                    ),
+
+                    "gift_earnings": (
+                        weekly_gift
+                    ),
+
+                    "game_earnings": (
+                        weekly_game
+                    ),
+
+                    "chat_earnings": (
+                        weekly_chat
+                    ),
+
+                    "total_earnings": (
+                        weekly_total
                     )
-                },
-                "total_gift_revenue": round(
-                    total_gift_revenue, 2
-                ),
-                "combined_total": round(
-                    combined_total, 2
-                )
+                }
             }
         }
-    }
 
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
