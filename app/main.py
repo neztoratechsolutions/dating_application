@@ -106,7 +106,9 @@ from routes.rewards import router as rewards_router
 from routes.notifications import router as notifications_router
 from routes.admin_voice_call import router as admin_voice_calls_router
 from routes.analytics import router as analytics_router
+from routes.revenue import router as revenue_router
 from models.referral import Referral
+from routes.gift_revenue import router as gift_revenue_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -196,3 +198,5 @@ app.include_router(rewards_router)
 app.include_router(notifications_router)
 app.include_router(admin_voice_calls_router)
 app.include_router(analytics_router)
+app.include_router(revenue_router)
+app.include_router(gift_revenue_router)

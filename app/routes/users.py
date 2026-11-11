@@ -1121,32 +1121,134 @@ def get_user(
 #                 user.updated_at
 #         }
 #     }
-@router.put(
-    "/{user_id}"
-)
+# @router.put(
+#     "/{user_id}"
+# )
+# async def update_user(
+#     user_id: int,
+
+#     display_name: str | None = Form(None),
+
+#     bio: str | None = Form(None),
+
+#     profile_photo: UploadFile | None = File(None),
+
+#     db: Session = Depends(get_db)
+# ):
+
+#     # ------------------------------------------------------
+#     # Get user
+#     # ------------------------------------------------------
+
+#     user = (
+#         db.query(User)
+#         .filter(
+#             User.id == user_id
+#         )
+#         .first()
+#     )
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="User not found"
+#         )
+
+#     # ------------------------------------------------------
+#     # Update display name
+#     # ------------------------------------------------------
+
+#     if display_name is not None:
+#         user.display_name = display_name
+
+#     # ------------------------------------------------------
+#     # Update bio
+#     # ------------------------------------------------------
+
+#     if bio is not None:
+#         user.bio = bio
+
+#     # ------------------------------------------------------
+#     # Update profile photo
+#     # ------------------------------------------------------
+
+#     if (
+#         profile_photo is not None
+#         and profile_photo.filename
+#     ):
+
+#         os.makedirs(
+#             UPLOAD_DIR,
+#             exist_ok=True
+#         )
+
+#         file_path = os.path.join(
+#             UPLOAD_DIR,
+#             profile_photo.filename
+#         )
+
+#         with open(
+#             file_path,
+#             "wb"
+#         ) as buffer:
+
+#             buffer.write(
+#                 await profile_photo.read()
+#             )
+
+#         user.profile_photo = file_path
+
+#     # ------------------------------------------------------
+#     # Save changes
+#     # ------------------------------------------------------
+
+#     db.commit()
+#     db.refresh(user)
+
+#     # ------------------------------------------------------
+#     # Return response
+#     # ------------------------------------------------------
+
+#     return {
+#         "message": "User updated successfully",
+
+#         "data": {
+#             "id": user.id,
+#             "display_name": user.display_name,
+#             "bio": user.bio,
+#             "description": user.description,
+#             "email": user.email,
+#             "phone": user.phone,
+#             "referral_code": user.referral_code,
+#             "state_id": user.state_id,
+#             "profile_photo": user.profile_photo,
+#             "is_active": user.is_active,
+#             "is_verified": user.is_verified,
+#             "gender": user.gender,
+#             "role": user.role,
+#             "updated_at": user.updated_at
+#         }
+#     }
+@router.put("/{user_id}")
 async def update_user(
     user_id: int,
 
+    # Edit Profile fields
     display_name: str | None = Form(None),
+    email: str | None = Form(None),
+    phone: str | None = Form(None),
+    state_id: int | None = Form(None),
 
+    # Existing optional fields
     bio: str | None = Form(None),
-
     profile_photo: UploadFile | None = File(None),
 
     db: Session = Depends(get_db)
 ):
-
-    # ------------------------------------------------------
     # Get user
-    # ------------------------------------------------------
-
-    user = (
-        db.query(User)
-        .filter(
-            User.id == user_id
-        )
-        .first()
-    )
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
 
     if not user:
         raise HTTPException(
@@ -1154,74 +1256,103 @@ async def update_user(
             detail="User not found"
         )
 
-    # ------------------------------------------------------
-    # Update display name
-    # ------------------------------------------------------
-
+    # Update name
     if display_name is not None:
-        user.display_name = display_name
+        user.display_name = display_name.strip()
 
-    # ------------------------------------------------------
+    # Update email
+    if email is not None:
+        email = email.strip().lower()
+
+        if email:
+            existing_email = db.query(User).filter(
+                User.email == email,
+                User.id != user_id
+            ).first()
+
+            if existing_email:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Email already registered"
+                )
+
+        user.email = email
+
+    # Update mobile number
+    if phone is not None:
+        phone = phone.strip()
+
+        if phone:
+            existing_phone = db.query(User).filter(
+                User.phone == phone,
+                User.id != user_id
+            ).first()
+
+            if existing_phone:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Mobile number already registered"
+                )
+
+        user.phone = phone
+
+    # Update state
+    if state_id is not None:
+        user.state_id = state_id
+
     # Update bio
-    # ------------------------------------------------------
-
     if bio is not None:
         user.bio = bio
 
-    # ------------------------------------------------------
     # Update profile photo
-    # ------------------------------------------------------
-
-    if (
-        profile_photo is not None
-        and profile_photo.filename
-    ):
+    if profile_photo is not None and profile_photo.filename:
 
         os.makedirs(
             UPLOAD_DIR,
             exist_ok=True
         )
 
+        extension = os.path.splitext(
+            profile_photo.filename
+        )[1]
+
+        filename = f"{uuid.uuid4().hex}{extension}"
+
         file_path = os.path.join(
             UPLOAD_DIR,
-            profile_photo.filename
+            filename
         )
 
-        with open(
-            file_path,
-            "wb"
-        ) as buffer:
-
-            buffer.write(
-                await profile_photo.read()
-            )
+        with open(file_path, "wb") as buffer:
+            buffer.write(await profile_photo.read())
 
         user.profile_photo = file_path
 
-    # ------------------------------------------------------
     # Save changes
-    # ------------------------------------------------------
+    try:
+        db.commit()
+        db.refresh(user)
 
-    db.commit()
-    db.refresh(user)
-
-    # ------------------------------------------------------
-    # Return response
-    # ------------------------------------------------------
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update user"
+        )
 
     return {
-        "message": "User updated successfully",
-
+        "status": True,
+        "message": "Profile updated successfully",
         "data": {
             "id": user.id,
             "display_name": user.display_name,
-            "bio": user.bio,
-            "description": user.description,
             "email": user.email,
             "phone": user.phone,
-            "referral_code": user.referral_code,
             "state_id": user.state_id,
+            "bio": user.bio,
+            "description": user.description,
             "profile_photo": user.profile_photo,
+            "referral_code": user.referral_code,
             "is_active": user.is_active,
             "is_verified": user.is_verified,
             "gender": user.gender,
@@ -1229,7 +1360,6 @@ async def update_user(
             "updated_at": user.updated_at
         }
     }
-
 # ==========================================================
 # DELETE USER
 # ==========================================================
