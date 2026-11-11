@@ -1,9 +1,9 @@
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
+from io import StringIO, BytesIO
 import csv
-from io import StringIO
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -15,9 +15,22 @@ from database import SessionLocal
 from models.voice_call import VoiceCall
 from models.video_call import VideoCall
 from models.gift_details import GiftDetail
+from models.gift_revenue import GiftRevenue
 from models.chat_history import ChatCallLog
 from models.game_details import GameSetting, GamePaymentDetail
 from models.Withdrawal import Withdrawal
+
+from openpyxl import Workbook
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 router = APIRouter(
@@ -51,7 +64,7 @@ def to_float(value):
 def utc_start(target_date: date):
     return datetime.combine(
         target_date,
-        time.min,
+        datetime.min.time(),
         tzinfo=timezone.utc
     )
 
@@ -74,6 +87,7 @@ def percentage_change(current, previous):
 
 
 def get_period_dates(period, start_date=None, end_date=None):
+
     today = datetime.now(timezone.utc).date()
 
     if period == "today":
@@ -89,6 +103,7 @@ def get_period_dates(period, start_date=None, end_date=None):
         return today.replace(day=1), today
 
     if period == "custom":
+
         if not start_date or not end_date:
             raise HTTPException(
                 status_code=400,
@@ -110,6 +125,63 @@ def get_period_dates(period, start_date=None, end_date=None):
 
 
 # =========================================================
+# REVENUE SPLIT PERCENTAGE
+# =========================================================
+
+def get_revenue_split_percentage(db: Session):
+
+    split = (
+        db.query(GiftRevenue)
+        .order_by(GiftRevenue.created_at.desc())
+        .first()
+    )
+
+    if not split:
+        raise HTTPException(
+            status_code=400,
+            detail="Revenue split percentage not found in GiftRevenue"
+        )
+
+    creator_value = to_float(split.creator_revenue)
+    platform_value = to_float(split.platform_revenue)
+
+    total = creator_value + platform_value
+
+    if total <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid creator/platform revenue split percentage"
+        )
+
+    return {
+        "creator_percentage": round(
+            (creator_value / total) * 100, 2
+        ),
+        "platform_percentage": round(
+            (platform_value / total) * 100, 2
+        )
+    }
+
+
+def calculate_revenue_split(amount, split_percentage):
+
+    amount = to_float(amount)
+
+    creator_payout = (
+        amount * split_percentage["creator_percentage"]
+    ) / 100
+
+    platform_profit = (
+        amount * split_percentage["platform_percentage"]
+    ) / 100
+
+    return {
+        "creator_payout": round(creator_payout, 2),
+        "platform_profit": round(platform_profit, 2)
+    }
+
+
+# =========================================================
 # REVENUE SOURCE QUERIES
 # =========================================================
 
@@ -118,12 +190,14 @@ def get_revenue_entries(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ):
+
     entries = []
 
     start_dt = utc_start(start_date) if start_date else None
     end_dt = utc_end(end_date) if end_date else None
 
     def add_entry(source, amount, created_at):
+
         if amount is None or created_at is None:
             return
 
@@ -143,7 +217,7 @@ def get_revenue_entries(
     # -----------------------------------------------------
 
     voice_query = db.query(VoiceCall).filter(
-        VoiceCall.status == "completed"
+        VoiceCall.status.in_(["completed", "ended"])
     )
 
     if hasattr(VoiceCall, "is_free_call"):
@@ -162,8 +236,9 @@ def get_revenue_entries(
         )
 
     for item in voice_query.all():
+
         add_entry(
-            "Voice Call",
+            "Calls",
             item.revenue,
             item.created_at
         )
@@ -187,14 +262,15 @@ def get_revenue_entries(
         )
 
     for item in video_query.all():
+
         add_entry(
-            "Video Call",
+            "Calls",
             item.revenue,
             item.created_at
         )
 
     # -----------------------------------------------------
-    # CHAT
+    # CHAT REVENUE
     # -----------------------------------------------------
 
     chat_query = db.query(ChatCallLog).filter(
@@ -212,6 +288,7 @@ def get_revenue_entries(
         )
 
     for item in chat_query.all():
+
         add_entry(
             "Chat",
             item.amount,
@@ -235,6 +312,7 @@ def get_revenue_entries(
         )
 
     for item in gift_query.all():
+
         add_entry(
             "Gifts",
             item.earnings,
@@ -243,7 +321,6 @@ def get_revenue_entries(
 
     # -----------------------------------------------------
     # COLOUR CONNECT / SCRATCH GAME
-    # GamePaymentDetail.paid = entry fee collected
     # -----------------------------------------------------
 
     game_query = (
@@ -268,9 +345,13 @@ def get_revenue_entries(
         )
 
     for payment, game_name in game_query.all():
+
         normalized_name = (game_name or "").strip().lower()
 
-        if "colour connect" in normalized_name or "color connect" in normalized_name:
+        if (
+            "colour connect" in normalized_name
+            or "color connect" in normalized_name
+        ):
             source = "Colour Connect"
 
         elif "scratch" in normalized_name:
@@ -285,43 +366,60 @@ def get_revenue_entries(
             payment.paid_date
         )
 
+    # Coin Purchase intentionally excluded.
+
     return entries
 
 
 # =========================================================
-# CREATOR PAYOUT HELPERS
+# REVENUE SPLIT CALCULATION
 # =========================================================
 
-def get_approved_payouts(
-    db: Session,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None
-):
-    payout_date = func.coalesce(
-        Withdrawal.processed_at,
-        Withdrawal.requested_at
-    )
+def add_revenue_split_to_entries(entries, split_percentage):
 
-    query = db.query(
-        func.coalesce(func.sum(Withdrawal.amount), 0)
-    ).filter(
-        func.lower(Withdrawal.status) == "approved"
-    )
+    for item in entries:
 
-    if start_date:
-        query = query.filter(
-            payout_date >= utc_start(start_date)
+        split = calculate_revenue_split(
+            item["amount"],
+            split_percentage
         )
 
-    if end_date:
-        query = query.filter(
-            payout_date < utc_end(end_date)
-        )
+        item["creator_payout"] = split["creator_payout"]
+        item["platform_profit"] = split["platform_profit"]
 
-    return to_float(query.scalar())
+    return entries
 
+
+def get_revenue_total(entries):
+
+    return round(
+        sum(item["amount"] for item in entries),
+        2
+    )
+
+
+def get_creator_payout_total(entries):
+
+    return round(
+        sum(item.get("creator_payout", 0) for item in entries),
+        2
+    )
+
+
+def get_platform_profit_total(entries):
+
+    return round(
+        sum(item.get("platform_profit", 0) for item in entries),
+        2
+    )
+
+
+# =========================================================
+# PENDING WITHDRAWALS
+# =========================================================
 
 def get_pending_withdrawals(db: Session):
+
     result = db.query(
         func.coalesce(func.sum(Withdrawal.amount), 0),
         func.count(Withdrawal.id)
@@ -335,34 +433,45 @@ def get_pending_withdrawals(db: Session):
     }
 
 
-def get_revenue_total(entries):
-    return round(
-        sum(item["amount"] for item in entries),
-        2
-    )
-
+# =========================================================
+# SOURCE SUMMARY
+# =========================================================
 
 def get_source_summary(entries):
+
     summary = {}
 
     for item in entries:
+
         source = item["source"]
 
         if source not in summary:
+
             summary[source] = {
                 "source": source,
                 "amount": 0.0,
-                "transactions": 0
+                "transactions": 0,
+                "creator_payout": 0.0,
+                "platform_profit": 0.0
             }
 
         summary[source]["amount"] += item["amount"]
         summary[source]["transactions"] += 1
+
+        summary[source]["creator_payout"] += item.get(
+            "creator_payout", 0
+        )
+
+        summary[source]["platform_profit"] += item.get(
+            "platform_profit", 0
+        )
 
     total = get_revenue_total(entries)
 
     result = []
 
     for item in summary.values():
+
         amount = round(item["amount"], 2)
 
         result.append({
@@ -372,7 +481,13 @@ def get_source_summary(entries):
             "percentage": round(
                 (amount / total) * 100,
                 2
-            ) if total else 0.0
+            ) if total else 0.0,
+            "creator_payout": round(
+                item["creator_payout"], 2
+            ),
+            "platform_profit": round(
+                item["platform_profit"], 2
+            )
         })
 
     return sorted(
@@ -382,30 +497,32 @@ def get_source_summary(entries):
     )
 
 
-def get_daily_summary(entries, start_date, end_date, payouts_by_date=None):
-    payouts_by_date = payouts_by_date or {}
+# =========================================================
+# DAILY SUMMARY
+# =========================================================
+
+def get_daily_summary(entries, start_date, end_date):
 
     daily = {}
 
     current_date = start_date
 
     while current_date <= end_date:
+
         key = current_date.isoformat()
 
         daily[key] = {
             "date": key,
             "revenue": 0.0,
             "transactions": 0,
-            "creator_payout": round(
-                payouts_by_date.get(key, 0.0),
-                2
-            ),
+            "creator_payout": 0.0,
             "platform_profit": 0.0
         }
 
         current_date += timedelta(days=1)
 
     for item in entries:
+
         key = item["date"]
 
         if key not in daily:
@@ -414,43 +531,241 @@ def get_daily_summary(entries, start_date, end_date, payouts_by_date=None):
         daily[key]["revenue"] += item["amount"]
         daily[key]["transactions"] += 1
 
+        daily[key]["creator_payout"] += item.get(
+            "creator_payout", 0
+        )
+
+        daily[key]["platform_profit"] += item.get(
+            "platform_profit", 0
+        )
+
     for item in daily.values():
+
         item["revenue"] = round(item["revenue"], 2)
 
+        item["creator_payout"] = round(
+            item["creator_payout"], 2
+        )
+
         item["platform_profit"] = round(
-            item["revenue"] - item["creator_payout"],
-            2
+            item["platform_profit"], 2
         )
 
     return list(daily.values())
 
 
-def get_payouts_by_date(
-    db: Session,
-    start_date: date,
-    end_date: date
-):
-    payout_date = func.coalesce(
-        Withdrawal.processed_at,
-        Withdrawal.requested_at
+# =========================================================
+# MONTHLY SUMMARY
+# =========================================================
+
+def get_monthly_summary(entries, year):
+
+    monthly_data = []
+
+    for month in range(1, 13):
+
+        month_entries = [
+            item for item in entries
+            if date.fromisoformat(item["date"]).month == month
+        ]
+
+        monthly_data.append({
+
+            "month": date(year, month, 1).strftime("%b"),
+
+            "revenue": get_revenue_total(month_entries),
+
+            "creator_payout": get_creator_payout_total(
+                month_entries
+            ),
+
+            "platform_profit": get_platform_profit_total(
+                month_entries
+            ),
+
+            "transactions": len(month_entries)
+        })
+
+    return monthly_data
+
+
+# =========================================================
+# EXPORT HELPERS
+# =========================================================
+
+def export_csv(ledger, start_date, end_date):
+
+    output = StringIO()
+
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Date",
+        "Source",
+        "Amount",
+        "Transactions",
+        "Creator Payout",
+        "Platform Profit"
+    ])
+
+    for item in ledger:
+
+        writer.writerow([
+            item["date"],
+            item["source"],
+            item["amount"],
+            item["transactions"],
+            item["creator_payout"],
+            item["platform_profit"]
+        ])
+
+    output.seek(0)
+
+    filename = f"revenue_ledger_{start_date}_{end_date}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
     )
 
-    rows = db.query(
-        func.date(payout_date),
-        func.coalesce(func.sum(Withdrawal.amount), 0)
-    ).filter(
-        func.lower(Withdrawal.status) == "approved",
-        payout_date >= utc_start(start_date),
-        payout_date < utc_end(end_date)
-    ).group_by(
-        func.date(payout_date)
-    ).all()
 
-    return {
-        row[0].isoformat(): to_float(row[1])
-        for row in rows
-        if row[0] is not None
-    }
+def export_excel(ledger, start_date, end_date):
+
+    workbook = Workbook()
+
+    sheet = workbook.active
+    sheet.title = "Revenue Ledger"
+
+    sheet.append([
+        "Date",
+        "Source",
+        "Amount",
+        "Transactions",
+        "Creator Payout",
+        "Platform Profit"
+    ])
+
+    for item in ledger:
+
+        sheet.append([
+            item["date"],
+            item["source"],
+            item["amount"],
+            item["transactions"],
+            item["creator_payout"],
+            item["platform_profit"]
+        ])
+
+    for column in sheet.columns:
+
+        max_length = max(
+            len(str(cell.value or ""))
+            for cell in column
+        )
+
+        sheet.column_dimensions[
+            column[0].column_letter
+        ].width = max_length + 3
+
+    output = BytesIO()
+
+    workbook.save(output)
+    output.seek(0)
+
+    filename = f"revenue_ledger_{start_date}_{end_date}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+def export_pdf(ledger, start_date, end_date):
+
+    output = BytesIO()
+
+    document = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4)
+    )
+
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    elements.append(
+        Paragraph("Revenue Ledger Report", styles["Title"])
+    )
+
+    elements.append(
+        Paragraph(
+            f"Period: {start_date} to {end_date}",
+            styles["Normal"]
+        )
+    )
+
+    elements.append(Spacer(1, 15))
+
+    table_data = [[
+        "Date",
+        "Source",
+        "Amount",
+        "Transactions",
+        "Creator Payout",
+        "Platform Profit"
+    ]]
+
+    for item in ledger:
+
+        table_data.append([
+            item["date"],
+            item["source"],
+            str(item["amount"]),
+            str(item["transactions"]),
+            str(item["creator_payout"]),
+            str(item["platform_profit"])
+        ])
+
+    table = Table(
+        table_data,
+        repeatRows=1
+    )
+
+    table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#263238")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("PADDING", (0, 0), (-1, -1), 6)
+        ])
+    )
+
+    elements.append(table)
+
+    document.build(elements)
+
+    output.seek(0)
+
+    filename = f"revenue_ledger_{start_date}_{end_date}.pdf"
+
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
 
 
 # =========================================================
@@ -467,24 +782,29 @@ def get_revenue_dashboard(
     end_date: Optional[date] = Query(None),
     export_format: Optional[str] = Query(
         None,
-        description="Use csv to download the filtered revenue ledger"
+        description="csv, excel or pdf"
     ),
     db: Session = Depends(get_db)
 ):
+
     try:
+
         today = datetime.now(timezone.utc).date()
         yesterday = today - timedelta(days=1)
+        day_before = yesterday - timedelta(days=1)
 
-        # Selected filter range
+        # Revenue split percentage
+        split_percentage = get_revenue_split_percentage(db)
+
+        # -------------------------------------------------
+        # SELECTED PERIOD
+        # -------------------------------------------------
+
         selected_start, selected_end = get_period_dates(
             period,
             start_date,
             end_date
         )
-
-        # -------------------------------------------------
-        # SELECTED PERIOD DATA
-        # -------------------------------------------------
 
         selected_entries = get_revenue_entries(
             db,
@@ -492,19 +812,21 @@ def get_revenue_dashboard(
             selected_end
         )
 
+        add_revenue_split_to_entries(
+            selected_entries,
+            split_percentage
+        )
+
         selected_revenue = get_revenue_total(
             selected_entries
         )
 
-        selected_payout = get_approved_payouts(
-            db,
-            selected_start,
-            selected_end
+        selected_creator_payout = get_creator_payout_total(
+            selected_entries
         )
 
-        selected_profit = round(
-            selected_revenue - selected_payout,
-            2
+        selected_platform_profit = get_platform_profit_total(
+            selected_entries
         )
 
         # -------------------------------------------------
@@ -523,15 +845,16 @@ def get_revenue_dashboard(
             yesterday
         )
 
-        today_revenue = get_revenue_total(today_entries)
-        yesterday_revenue = get_revenue_total(yesterday_entries)
-
-        day_before = yesterday - timedelta(days=1)
-
         day_before_entries = get_revenue_entries(
             db,
             day_before,
             day_before
+        )
+
+        today_revenue = get_revenue_total(today_entries)
+
+        yesterday_revenue = get_revenue_total(
+            yesterday_entries
         )
 
         day_before_revenue = get_revenue_total(
@@ -540,10 +863,10 @@ def get_revenue_dashboard(
 
         # -------------------------------------------------
         # WEEKLY REVENUE
-        # Monday to Sunday
         # -------------------------------------------------
 
         week_start = today - timedelta(days=today.weekday())
+
         previous_week_start = week_start - timedelta(days=7)
         previous_week_end = week_start - timedelta(days=1)
 
@@ -560,6 +883,7 @@ def get_revenue_dashboard(
         )
 
         weekly_revenue = get_revenue_total(weekly_entries)
+
         previous_week_revenue = get_revenue_total(
             previous_week_entries
         )
@@ -571,7 +895,10 @@ def get_revenue_dashboard(
         month_start = today.replace(day=1)
 
         previous_month_last_day = month_start - timedelta(days=1)
-        previous_month_start = previous_month_last_day.replace(day=1)
+
+        previous_month_start = previous_month_last_day.replace(
+            day=1
+        )
 
         monthly_entries = get_revenue_entries(
             db,
@@ -599,32 +926,31 @@ def get_revenue_dashboard(
 
         lifetime_entries = get_revenue_entries(db)
 
+        add_revenue_split_to_entries(
+            lifetime_entries,
+            split_percentage
+        )
+
         total_revenue = get_revenue_total(
             lifetime_entries
         )
 
-        total_creator_payouts = get_approved_payouts(db)
+        total_creator_payouts = get_creator_payout_total(
+            lifetime_entries
+        )
 
-        total_platform_profit = round(
-            total_revenue - total_creator_payouts,
-            2
+        total_platform_profit = get_platform_profit_total(
+            lifetime_entries
         )
 
         # -------------------------------------------------
-        # CREATOR PAYOUTS / PENDING WITHDRAWALS
+        # PENDING WITHDRAWALS
         # -------------------------------------------------
-
-        monthly_creator_payouts = get_approved_payouts(
-            db,
-            month_start,
-            today
-        )
 
         pending_withdrawals = get_pending_withdrawals(db)
 
         # -------------------------------------------------
         # SOURCE-WISE REVENUE
-        # Lifetime breakdown
         # -------------------------------------------------
 
         revenue_by_source = get_source_summary(
@@ -639,26 +965,17 @@ def get_revenue_dashboard(
         # DAILY TREND
         # -------------------------------------------------
 
-        payouts_by_date = get_payouts_by_date(
-            db,
+        daily_trend = get_daily_summary(
+            selected_entries,
             selected_start,
             selected_end
         )
 
-        daily_trend = get_daily_summary(
-            selected_entries,
-            selected_start,
-            selected_end,
-            payouts_by_date
-        )
-
         # -------------------------------------------------
         # MONTHLY REVENUE & PROFIT
-        # Current year Jan to Dec
         # -------------------------------------------------
 
         year_start = date(today.year, 1, 1)
-        year_end = date(today.year, 12, 31)
 
         year_entries = get_revenue_entries(
             db,
@@ -666,36 +983,28 @@ def get_revenue_dashboard(
             today
         )
 
-        year_payouts = get_payouts_by_date(
-            db,
-            year_start,
-            today
+        add_revenue_split_to_entries(
+            year_entries,
+            split_percentage
         )
 
-        monthly_data = []
+        monthly_data = get_monthly_summary(
+            year_entries,
+            today.year
+        )
 
-        for month in range(1, 13):
-            month_revenue = sum(
-                item["amount"]
-                for item in year_entries
-                if date.fromisoformat(item["date"]).month == month
-            )
+        # -------------------------------------------------
+        # CREATOR PAYOUT TREND
+        # -------------------------------------------------
 
-            month_payout = sum(
-                amount
-                for payout_date, amount in year_payouts.items()
-                if date.fromisoformat(payout_date).month == month
-            )
-
-            monthly_data.append({
-                "month": date(today.year, month, 1).strftime("%b"),
-                "revenue": round(month_revenue, 2),
-                "creator_payout": round(month_payout, 2),
-                "platform_profit": round(
-                    month_revenue - month_payout,
-                    2
-                )
-            })
+        creator_payout_trend = [
+            {
+                "date": item["date"],
+                "creator_payout": item["creator_payout"],
+                "platform_profit": item["platform_profit"]
+            }
+            for item in daily_trend
+        ]
 
         # -------------------------------------------------
         # REVENUE LEDGER
@@ -708,66 +1017,54 @@ def get_revenue_dashboard(
             key=lambda x: x["date"],
             reverse=True
         ):
+
             ledger.append({
                 "date": item["date"],
                 "source": item["source"],
                 "amount": item["amount"],
                 "transactions": 1,
-
-                # Source-wise payout allocation is not stored
-                # in the supplied models.
-                "creator_payout": None,
-                "platform_profit": None
+                "creator_payout": item["creator_payout"],
+                "platform_profit": item["platform_profit"]
             })
 
         # -------------------------------------------------
-        # CSV EXPORT
+        # EXPORT
         # -------------------------------------------------
 
         if export_format:
-            if export_format.lower() != "csv":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Currently only csv export is supported"
+
+            export_type = export_format.lower()
+
+            if export_type == "csv":
+
+                return export_csv(
+                    ledger,
+                    selected_start,
+                    selected_end
                 )
 
-            output = StringIO()
-            writer = csv.writer(output)
+            elif export_type in ["excel", "xlsx"]:
 
-            writer.writerow([
-                "Date",
-                "Source",
-                "Amount",
-                "Transactions",
-                "Creator Payout",
-                "Platform Profit"
-            ])
+                return export_excel(
+                    ledger,
+                    selected_start,
+                    selected_end
+                )
 
-            for item in ledger:
-                writer.writerow([
-                    item["date"],
-                    item["source"],
-                    item["amount"],
-                    item["transactions"],
-                    item["creator_payout"] or "",
-                    item["platform_profit"] or ""
-                ])
+            elif export_type == "pdf":
 
-            output.seek(0)
+                return export_pdf(
+                    ledger,
+                    selected_start,
+                    selected_end
+                )
 
-            filename = (
-                f"revenue_ledger_{selected_start}_{selected_end}.csv"
-            )
+            else:
 
-            return StreamingResponse(
-                iter([output.getvalue()]),
-                media_type="text/csv",
-                headers={
-                    "Content-Disposition": (
-                        f'attachment; filename="{filename}"'
-                    )
-                }
-            )
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid export format. Use csv, excel or pdf"
+                )
 
         # -------------------------------------------------
         # FINAL RESPONSE
@@ -783,7 +1080,10 @@ def get_revenue_dashboard(
                 "end_date": selected_end.isoformat()
             },
 
+            "revenue_split_percentage": split_percentage,
+
             "summary": {
+
                 "todays_revenue": {
                     "amount": round(today_revenue, 2),
                     "change_percentage": percentage_change(
@@ -826,10 +1126,7 @@ def get_revenue_dashboard(
                 },
 
                 "creator_payouts": {
-                    "amount": round(
-                        monthly_creator_payouts,
-                        2
-                    )
+                    "amount": round(total_creator_payouts, 2)
                 },
 
                 "pending_withdrawals": pending_withdrawals
@@ -837,8 +1134,12 @@ def get_revenue_dashboard(
 
             "selected_period": {
                 "revenue": round(selected_revenue, 2),
-                "creator_payout": round(selected_payout, 2),
-                "platform_profit": round(selected_profit, 2)
+                "creator_payout": round(
+                    selected_creator_payout, 2
+                ),
+                "platform_profit": round(
+                    selected_platform_profit, 2
+                )
             },
 
             "revenue_by_source": revenue_by_source,
@@ -860,14 +1161,22 @@ def get_revenue_dashboard(
 
             "monthly_revenue_profit": monthly_data,
 
-            "creator_payout_trend": [
-                {
-                    "date": item["date"],
-                    "creator_payout": item["creator_payout"],
-                    "platform_profit": item["platform_profit"]
-                }
-                for item in daily_trend
-            ],
+            "creator_payout_trend": creator_payout_trend,
+
+            "revenue_split": {
+                "creator_payout": round(
+                    total_creator_payouts, 2
+                ),
+                "platform_profit": round(
+                    total_platform_profit, 2
+                ),
+                "creator_percentage": split_percentage[
+                    "creator_percentage"
+                ],
+                "platform_percentage": split_percentage[
+                    "platform_percentage"
+                ]
+            },
 
             "revenue_ledger": {
                 "total_entries": len(ledger),
@@ -879,6 +1188,7 @@ def get_revenue_dashboard(
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve revenue dashboard: {str(e)}"
