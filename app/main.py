@@ -117,6 +117,7 @@ from routes.Withdrawal import router as withdrawal_router
 from routes.rewards import router as rewards_router
 from routes.analytics import router as analytics_router
 from routes.revenue import router as revenue_router
+from routes.admin_kyc_details import router as admin_kyc_details_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -212,3 +213,4 @@ app.include_router(admin_video_call_router)
 app.include_router(rewards_router)
 app.include_router(analytics_router)
 app.include_router(revenue_router)
+app.include_router(admin_kyc_details_router)
