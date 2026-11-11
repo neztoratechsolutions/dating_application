@@ -58,6 +58,7 @@ from models.game_details import (
 from models.creator_verify import CreatorVerification
 from models.withdraw import WithdrawalRequest
 from models.referral import Referral
+from models.live_users import LiveUserSession
 
 from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
@@ -118,6 +119,7 @@ from routes.rewards import router as rewards_router
 from routes.analytics import router as analytics_router
 from routes.revenue import router as revenue_router
 from routes.admin_kyc_details import router as admin_kyc_details_router
+from routes.live_users import router as live_users_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -214,3 +216,4 @@ app.include_router(rewards_router)
 app.include_router(analytics_router)
 app.include_router(revenue_router)
 app.include_router(admin_kyc_details_router)
+app.include_router(live_users_router)
