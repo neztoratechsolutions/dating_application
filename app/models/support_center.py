@@ -20,9 +20,17 @@ from database import Base
 class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
-    ticket_id = Column(String(30), unique=True, nullable=False)
+    ticket_id = Column(
+        String(30),
+        unique=True,
+        nullable=False
+    )
 
     user_id = Column(
         Integer,
@@ -30,7 +38,10 @@ class SupportTicket(Base):
         nullable=False
     )
 
-    subject = Column(String(255), nullable=False)
+    subject = Column(
+        String(255),
+        nullable=False
+    )
 
     category = Column(
         Enum(
@@ -47,16 +58,25 @@ class SupportTicket(Base):
         nullable=False
     )
 
+    # ==========================================
+    # ADMIN ONLY - PRIORITY
+    # ==========================================
+
     priority = Column(
         Enum(
             "Low",
             "Medium",
             "High",
-            "Urgent",
+            "Critical",
             name="support_priority_enum"
         ),
-        default="Medium"
+        default="Medium",
+        nullable=False
     )
+
+    # ==========================================
+    # ADMIN ONLY - STATUS
+    # ==========================================
 
     status = Column(
         Enum(
@@ -66,7 +86,8 @@ class SupportTicket(Base):
             "Closed",
             name="support_status_enum"
         ),
-        default="Open"
+        default="Open",
+        nullable=False
     )
 
     created_at = Column(
@@ -88,11 +109,18 @@ class SupportTicket(Base):
 class SupportTicketMessage(Base):
     __tablename__ = "support_ticket_messages"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
     ticket_id = Column(
         Integer,
-        ForeignKey("support_tickets.id", ondelete="CASCADE"),
+        ForeignKey(
+            "support_tickets.id",
+            ondelete="CASCADE"
+        ),
         nullable=False
     )
 
@@ -102,11 +130,20 @@ class SupportTicketMessage(Base):
         nullable=False
     )
 
-    message = Column(Text, nullable=False)
+    message = Column(
+        Text,
+        nullable=False
+    )
 
-    attachment = Column(String(255), nullable=True)
+    attachment = Column(
+        String(255),
+        nullable=True
+    )
 
-    is_admin = Column(Boolean, default=False)
+    is_admin = Column(
+        Boolean,
+        default=False
+    )
 
     created_at = Column(
         DateTime(timezone=True),
