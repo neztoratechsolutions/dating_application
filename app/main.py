@@ -59,6 +59,11 @@ from models.creator_verify import CreatorVerification
 from models.withdraw import WithdrawalRequest
 from models.referral import Referral
 from models.live_users import LiveUserSession
+from models.creator_account_status import CreatorAccountStatus
+from models.fraud_alert import FraudAlert
+from models.fraud_action_log import FraudActionLog
+from models.creator_agreement_acceptance import CreatorAgreementAcceptance
+from models.creator_bank_details import CreatorBankDetails
 
 from routes.kyc_details import router as kyc_detail_router
 from routes.creator_kyc import router as creator_kyc_router
@@ -120,7 +125,10 @@ from routes.analytics import router as analytics_router
 from routes.revenue import router as revenue_router
 from routes.admin_kyc_details import router as admin_kyc_details_router
 from routes.live_users import router as live_users_router
-
+from routes.admin_fraud_detection import router as admin_fraud_router
+from routes.kyc_review import router as kyc_review_router
+from routes.creator_bank_details import router as creator_bank_details_router
+from routes.creator_acceptance import router as creator_acceptance_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -217,3 +225,7 @@ app.include_router(analytics_router)
 app.include_router(revenue_router)
 app.include_router(admin_kyc_details_router)
 app.include_router(live_users_router)
+app.include_router(admin_fraud_router)
+app.include_router(kyc_review_router)
+app.include_router(creator_bank_details_router)
+app.include_router( creator_acceptance_router)
