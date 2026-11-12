@@ -109,7 +109,7 @@ def create_user(
     # ------------------------------------------------------
     # If gender is Male -> role is "customer"
     # If gender is Female -> role is "creator"
-    assigned_role = "creator" if user.gender == "Female" else "customer"
+    # assigned_role = "creator" if user.gender == "Female" else "customer"
 
     new_user = User(
         email=user.email,
@@ -121,7 +121,7 @@ def create_user(
         state_id=user.state_id,
         profile_photo=user.profile_photo,
         gender=user.gender,
-        role=assigned_role,              # <--- Pass the dynamically assigned role here
+        role=user.role,              # <--- Pass the dynamically assigned role here
         referral_code=generate_referral_code()
     )
 

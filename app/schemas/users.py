@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     bio: Optional[str] = None
     description: Optional[str] = None
     state_id: int
+    role:str
     profile_photo: Optional[str] = None
     gender: Literal["Male", "Female", "Other"]
 
