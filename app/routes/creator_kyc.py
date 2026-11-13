@@ -17,7 +17,9 @@ from pydantic import BaseModel
 from database import get_db
 from models.users import User
 from models.kyc_detail import CreatorKYC
-
+from models.creator_bank_details import CreatorBankDetails
+from models.creator_verify import CreatorVerification
+from typing import Literal
 
 router = APIRouter(
     prefix="/creator-kyc",
@@ -268,71 +270,171 @@ def get_creator_kyc_by_user_id(
 # ADMIN - UPDATE BANK STATUS BY USER ID
 # ============================================================
 
+# @router.put("/{user_id}/status")
+# def update_creator_kyc_status(
+#     user_id: int,
+#     request: CreatorKYCStatusUpdate,
+#     db: Session = Depends(get_db)
+# ):
+#     # --------------------------------------------------------
+#     # Check user
+#     # --------------------------------------------------------
+
+#     user = db.query(User).filter(
+#         User.id == user_id
+#     ).first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+
+#     # --------------------------------------------------------
+#     # Get Creator KYC
+#     # --------------------------------------------------------
+
+#     creator_kyc = db.query(CreatorKYC).filter(
+#         CreatorKYC.user_id == user_id
+#     ).first()
+
+#     if not creator_kyc:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Creator KYC data not found"
+#         )
+
+#     # --------------------------------------------------------
+#     # Validate status
+#     # --------------------------------------------------------
+
+#     allowed_statuses = {
+#         "Pending",
+#         "Approved",
+#         "Rejected"
+#     }
+
+#     if request.bank_status not in allowed_statuses:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Invalid status. Use Pending, Approved or Rejected"
+#         )
+
+#     # --------------------------------------------------------
+#     # Update status
+#     # --------------------------------------------------------
+
+#     creator_kyc.bank_status = request.bank_status
+
+#     db.commit()
+#     db.refresh(creator_kyc)
+
+#     return {
+#         "status": 200,
+#         "message": "Bank status updated successfully",
+#         "data": {
+#             "user_id": creator_kyc.user_id,
+#             "bank_photo": creator_kyc.bank_photo,
+#             "bank_status": creator_kyc.bank_status
+#         }
+#     }
+
 @router.put("/{user_id}/status")
 def update_creator_kyc_status(
     user_id: int,
     request: CreatorKYCStatusUpdate,
     db: Session = Depends(get_db)
 ):
-    # --------------------------------------------------------
-    # Check user
-    # --------------------------------------------------------
+    try:
+        # --------------------------------------------------------
+        # Check user
+        # --------------------------------------------------------
 
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+        user = db.query(User).filter(
+            User.id == user_id,
+            User.role == "creator"
+        ).first()
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Creator not found"
+            )
 
-    # --------------------------------------------------------
-    # Get Creator KYC
-    # --------------------------------------------------------
+        # --------------------------------------------------------
+        # Check Creator Bank Details
+        # --------------------------------------------------------
 
-    creator_kyc = db.query(CreatorKYC).filter(
-        CreatorKYC.user_id == user_id
-    ).first()
+        bank_details = db.query(CreatorBankDetails).filter(
+            CreatorBankDetails.creator_id == user_id
+        ).first()
 
-    if not creator_kyc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Creator KYC data not found"
-        )
+        if not bank_details:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Creator bank details not found"
+            )
 
-    # --------------------------------------------------------
-    # Validate status
-    # --------------------------------------------------------
+        # --------------------------------------------------------
+        # Check Creator Verification
+        # --------------------------------------------------------
 
-    allowed_statuses = {
-        "Pending",
-        "Approved",
-        "Rejected"
-    }
+        verification = db.query(CreatorVerification).filter(
+            CreatorVerification.creator_id == user_id
+        ).first()
 
-    if request.bank_status not in allowed_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid status. Use Pending, Approved or Rejected"
-        )
+        if not verification:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Creator verification data not found"
+            )
 
-    # --------------------------------------------------------
-    # Update status
-    # --------------------------------------------------------
+        # --------------------------------------------------------
+        # Validate Voice and Selfie Verification
+        # --------------------------------------------------------
 
-    creator_kyc.bank_status = request.bank_status
+        if request.bank_status == "Approved":
 
-    db.commit()
-    db.refresh(creator_kyc)
+            if (
+                verification.voice_status.lower() != "approved"
+                or verification.selfie_status.lower() != "approved"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Voice and selfie verification must be approved first"
+                )
 
-    return {
-        "status": 200,
-        "message": "Bank status updated successfully",
-        "data": {
-            "user_id": creator_kyc.user_id,
-            "bank_photo": creator_kyc.bank_photo,
-            "bank_status": creator_kyc.bank_status
+        # --------------------------------------------------------
+        # Update Bank Status
+        # --------------------------------------------------------
+
+        bank_details.bank_status = request.bank_status
+
+        db.commit()
+        db.refresh(bank_details)
+
+        return {
+            "status": 200,
+            "message": "Bank status updated successfully",
+            "data": {
+                "user_id": user_id,
+                "holder_name": bank_details.holder_name,
+                "account_number": bank_details.account_number,
+                "ifsc_code": bank_details.ifsc_code,
+                "bank_name": bank_details.bank_name,
+                "bank_status": bank_details.bank_status,
+                "voice_status": verification.voice_status,
+                "selfie_status": verification.selfie_status
+            }
         }
-    }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update bank status: {str(e)}"
+        )

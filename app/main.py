@@ -101,7 +101,7 @@ from models.withdraw import WithdrawalRequest
 from models.Withdrawal import Withdrawal
 from routes.gift_history import router as gift_history_router
 from routes.chat_moderation import router as chat_moderation_router
-from routes.admin_video_call import router as admin_video_call_router
+# from routes.admin_video_call import router as admin_video_call_router
 from routes.admin_dashboard import router as admin_dashboard_router
 from routes.Withdrawal import router as withdrawal_router
 from routes.rewards import router as rewards_router
@@ -114,6 +114,13 @@ from routes.gift_revenue import router as gift_revenue_router
 from routes.live_users import router as live_users_router
 from routes.admin_fraud_detection import router as admin_fraud_router
 from models.live_users import LiveUserSession
+from models.creator_agreement_acceptance import CreatorAgreementAcceptance
+from models.creator_bank_details import CreatorBankDetails
+from models.creator_account_status import CreatorAccountStatus
+from routes.kyc_review import router as kyc_review_router
+from routes.creator_bank_details import router as creator_bank_details_router
+from routes.creator_acceptance import router as creator_acceptance_router
+from routes.creator_agreement import router as creator_agreement_router
 Base.metadata.create_all(bind=engine)
 
 
@@ -196,7 +203,7 @@ app.include_router(customer_settings_router)
 app.include_router(creator_dashboard_router)
 app.include_router(gift_history_router)
 app.include_router(chat_moderation_router)
-app.include_router(admin_video_call_router)
+# app.include_router(admin_video_call_router)
 app.include_router(admin_dashboard_router)
 app.include_router(withdrawal_router)
 app.include_router(rewards_router)
@@ -207,3 +214,7 @@ app.include_router(revenue_router)
 app.include_router(gift_revenue_router)
 app.include_router(live_users_router)
 app.include_router(admin_fraud_router)
+app.include_router(kyc_review_router)
+app.include_router(creator_bank_details_router)
+app.include_router(creator_acceptance_router)
+
