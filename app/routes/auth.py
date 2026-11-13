@@ -494,7 +494,6 @@ def reset_password(
     ).first()
 
     if not user:
-
         raise HTTPException(
             status_code=404,
             detail="User not found"
@@ -504,15 +503,13 @@ def reset_password(
         OTPVerification
     ).filter(
         OTPVerification.user_id == user.id,
-        OTPVerification.otp == data.otp,
         OTPVerification.is_verified == True
     ).first()
 
     if not otp_record:
-
         raise HTTPException(
             status_code=400,
-            detail="OTP verification required"
+            detail="Email verification required"
         )
 
     user.password = hash_password(
@@ -524,5 +521,6 @@ def reset_password(
     db.commit()
 
     return {
+        "status_code": 200,
         "message": "Password reset successful"
     }
