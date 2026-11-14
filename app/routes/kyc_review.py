@@ -10,6 +10,7 @@ from database import get_db
 from models.users import User
 from models.kyc_detail import KYCDetail, CreatorKYC
 from models.creator_bank_details import CreatorBankDetails
+from models.creator_verify import CreatorVerification
 from models.state import State
 from models.creator_account_status import CreatorAccountStatus
 from models.fraud_alert import FraudAlert
@@ -30,39 +31,36 @@ router = APIRouter(
 # REQUEST SCHEMAS
 # ==========================================================
 
-class CreatorStatusUpdate(BaseModel):
+class CreatorRejectRequest(BaseModel):
 
-    status: Literal[
-        "Approved",
-        "Rejected",
-        "Re-upload Required"
-    ]
-
-    reason: Optional[str] = None
-
-    document: Optional[
-        Literal["aadhar", "pan", "selfie"]
-    ] = None
+    reason: str
 
 
-class CreatorAccountStatusUpdate(BaseModel):
+class CreatorReUploadRequest(BaseModel):
 
-    status: Literal[
-        "Suspended",
-        "Banned"
-    ]
+    reason: str
+
+
+class CreatorSuspendRequest(BaseModel):
 
     reason: str
 
     admin_id: Optional[int] = None
-
-    fraud_alert_id: Optional[int] = None
 
     suspend_days: Optional[int] = Field(
         default=None,
         ge=1,
         le=365
     )
+
+
+class CreatorBanRequest(BaseModel):
+
+    reason: str
+
+    admin_id: Optional[int] = None
+
+    fraud_alert_id: Optional[int] = None
 
 
 # ==========================================================
@@ -213,7 +211,6 @@ def get_creator_kyc_review(
 
     bank_details = {
 
-        # Existing bank KYC document details
         "bank_photo": build_file_url(
             bank_kyc.bank_photo
             if bank_kyc
@@ -226,7 +223,6 @@ def get_creator_kyc_review(
             else "Pending"
         ),
 
-        # New creator bank account details
         "holder_name": (
             bank_details_record.holder_name
             if bank_details_record
@@ -508,12 +504,6 @@ def get_creator_kyc_review(
                 agreement_acceptance.agreement_id
             ),
 
-            "agreement_details": (
-                agreement.details
-                if agreement
-                else None
-            ),
-
             "agreement_pdf_url": agreement_pdf_url
         }
 
@@ -523,8 +513,6 @@ def get_creator_kyc_review(
 
     timeline = []
 
-    # Signup
-
     if user.created_at:
 
         timeline.append({
@@ -533,8 +521,6 @@ def get_creator_kyc_review(
 
             "date": user.created_at
         })
-
-    # Aadhaar
 
     if kyc and kyc.aadhar_photo:
 
@@ -549,8 +535,6 @@ def get_creator_kyc_review(
             ) or kyc.created_at
         })
 
-    # PAN
-
     if kyc and kyc.pan_photo:
 
         timeline.append({
@@ -563,8 +547,6 @@ def get_creator_kyc_review(
                 None
             ) or kyc.created_at
         })
-
-    # Selfie
 
     if kyc and kyc.selfie_photo:
 
@@ -579,8 +561,6 @@ def get_creator_kyc_review(
             ) or kyc.created_at
         })
 
-    # KYC Submitted
-
     if kyc:
 
         timeline.append({
@@ -594,8 +574,6 @@ def get_creator_kyc_review(
             ) or kyc.created_at
         })
 
-    # Fraud timeline
-
     for alert in fraud_alerts:
 
         timeline.append({
@@ -607,8 +585,6 @@ def get_creator_kyc_review(
 
             "date": alert.created_at
         })
-
-    # Sort timeline
 
     timeline.sort(
         key=lambda x: (
@@ -649,16 +625,326 @@ def get_creator_kyc_review(
 
 
 # ==========================================================
-# 2. UPDATE CREATOR KYC STATUS
+# 2. APPROVE CREATOR
 # ==========================================================
 
-@router.post("/{creator_id}/status")
-def update_creator_review_status(
-
+@router.post("/{creator_id}/approve")
+def approve_creator(
     creator_id: int,
+    db: Session = Depends(get_db)
+):
 
-    data: CreatorStatusUpdate,
+    try:
 
+        creator = db.query(User).filter(
+            User.id == creator_id,
+            User.role == "creator"
+        ).first()
+
+        if not creator:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Creator not found"
+            )
+
+        kyc = db.query(KYCDetail).filter(
+            KYCDetail.user_id == creator_id
+        ).first()
+
+        bank_kyc = db.query(CreatorKYC).filter(
+            CreatorKYC.user_id == creator_id
+        ).first()
+
+        verification = db.query(
+            CreatorVerification
+        ).filter(
+            CreatorVerification.creator_id
+            == creator_id
+        ).first()
+
+        if not kyc:
+
+            raise HTTPException(
+                status_code=404,
+                detail="KYC details not found"
+            )
+
+        if not bank_kyc:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Bank KYC details not found"
+            )
+
+        if not verification:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Creator verification details not found"
+            )
+
+        # Bank
+        bank_kyc.bank_status = "Approved"
+
+        # Selfie
+        verification.selfie_status = "Approved"
+
+        # Voice
+        verification.voice_status = "Approved"
+
+        # Overall
+        kyc.status = "Approved"
+        kyc.rejection_reason = None
+
+        db.commit()
+
+        return {
+
+            "status": True,
+
+            "message": (
+                "Creator KYC approved successfully"
+            ),
+
+            "creator_id": creator_id,
+
+            "kyc_status": "Approved",
+
+            "bank_status": "Approved",
+
+            "selfie_status": "Approved",
+
+            "voice_status": "Approved"
+        }
+
+    except HTTPException:
+
+        db.rollback()
+
+        raise
+
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to approve creator KYC: "
+                f"{str(e)}"
+            )
+        )
+
+
+# ==========================================================
+# 3. REJECT CREATOR
+# ==========================================================
+
+@router.post("/{creator_id}/reject")
+def reject_creator(
+    creator_id: int,
+    data: CreatorRejectRequest,
+    db: Session = Depends(get_db)
+):
+
+    try:
+
+        creator = db.query(User).filter(
+            User.id == creator_id,
+            User.role == "creator"
+        ).first()
+
+        if not creator:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Creator not found"
+            )
+
+        kyc = db.query(KYCDetail).filter(
+            KYCDetail.user_id == creator_id
+        ).first()
+
+        bank_kyc = db.query(CreatorKYC).filter(
+            CreatorKYC.user_id == creator_id
+        ).first()
+
+        verification = db.query(
+            CreatorVerification
+        ).filter(
+            CreatorVerification.creator_id
+            == creator_id
+        ).first()
+
+        if not kyc:
+
+            raise HTTPException(
+                status_code=404,
+                detail="KYC details not found"
+            )
+
+        if not bank_kyc:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Bank KYC details not found"
+            )
+
+        if not verification:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Creator verification details not found"
+            )
+
+        reason = data.reason.strip()
+
+        if not reason:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Rejection reason is required"
+            )
+
+        # Bank
+        bank_kyc.bank_status = "Rejected"
+
+        # Selfie
+        verification.selfie_status = "Rejected"
+
+        # Voice
+        verification.voice_status = "Rejected"
+
+        # Overall
+        kyc.status = "Rejected"
+        kyc.rejection_reason = reason
+
+        db.commit()
+
+        return {
+
+            "status": True,
+
+            "message": (
+                "Creator KYC rejected successfully"
+            ),
+
+            "creator_id": creator_id,
+
+            "kyc_status": "Rejected",
+
+            "bank_status": "Rejected",
+
+            "selfie_status": "Rejected",
+
+            "voice_status": "Rejected",
+
+            "reason": reason
+        }
+
+    except HTTPException:
+
+        db.rollback()
+
+        raise
+
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to reject creator KYC: "
+                f"{str(e)}"
+            )
+        )
+
+
+# ==========================================================
+# 4. RE-UPLOAD CREATOR
+# ==========================================================
+
+@router.post("/{creator_id}/re-upload")
+def reupload_creator_kyc(
+    creator_id: int,
+    data: CreatorReUploadRequest,
+    db: Session = Depends(get_db)
+):
+    creator = (
+        db.query(User)
+        .filter(User.id == creator_id)
+        .first()
+    )
+
+    if not creator:
+        raise HTTPException(
+            status_code=404,
+            detail="Creator not found"
+        )
+
+    # Bank verification
+    bank_kyc = (
+        db.query(CreatorKYC)
+        .filter(CreatorKYC.user_id == creator_id)
+        .first()
+    )
+
+    if not bank_kyc:
+        raise HTTPException(
+            status_code=404,
+            detail="Bank verification details not found"
+        )
+
+    # Voice + Selfie verification
+    verification = (
+        db.query(CreatorVerification)
+        .filter(CreatorVerification.creator_id == creator_id)
+        .first()
+    )
+
+    if not verification:
+        raise HTTPException(
+            status_code=404,
+            detail="Creator verification details not found"
+        )
+
+    reason = data.reason.strip()
+
+    if not reason:
+        raise HTTPException(
+            status_code=400,
+            detail="Re-upload reason is required"
+        )
+
+    # Update only Bank, Voice, Selfie
+    bank_kyc.bank_status = "Re-uploaded"
+
+    verification.voice_status = "Re-uploaded"
+    verification.selfie_status = "Re-uploaded"
+
+    db.commit()
+
+    return {
+        "status": True,
+        "message": "Creator verification marked for re-upload successfully",
+        "creator_id": creator_id,
+        "bank_status": bank_kyc.bank_status,
+        "voice_status": verification.voice_status,
+        "selfie_status": verification.selfie_status,
+        "reason": reason
+    }
+
+
+# ==========================================================
+# 5. SUSPEND CREATOR
+# ==========================================================
+
+@router.post("/{creator_id}/suspend")
+def suspend_creator(
+    creator_id: int,
+    data: CreatorSuspendRequest,
     db: Session = Depends(get_db)
 ):
 
@@ -681,12 +967,17 @@ def update_creator_review_status(
             )
 
         # ==================================================
-        # GET KYC
+        # VALIDATE REASON
         # ==================================================
 
-        kyc = db.query(KYCDetail).filter(
-            KYCDetail.user_id == creator_id
-        ).first()
+        reason = data.reason.strip()
+
+        if not reason:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Suspension reason is required"
+            )
 
         # ==================================================
         # GET ACCOUNT STATUS
@@ -700,7 +991,7 @@ def update_creator_review_status(
         ).first()
 
         # ==================================================
-        # PERMANENT BAN CHECK
+        # BANNED CHECK
         # ==================================================
 
         if account and account.status == "Banned":
@@ -708,148 +999,51 @@ def update_creator_review_status(
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    "Permanently banned creator "
-                    "status cannot be changed"
+                    "Banned creator cannot be suspended"
                 )
             )
 
         # ==================================================
-        # CLEAN REASON
+        # CREATE ACCOUNT STATUS IF NOT EXISTS
         # ==================================================
 
-        reason = (
-            data.reason.strip()
-            if data.reason
-            else None
-        )
+        if not account:
 
-        # ==================================================
-        # REASON VALIDATION
-        # ==================================================
-
-        if data.status in [
-            "Rejected",
-            "Re-upload Required"
-        ]:
-
-            if not reason:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail="Reason is required"
-                )
-
-        # ==================================================
-        # APPROVED
-        # ==================================================
-
-        if data.status == "Approved":
-
-            if not kyc:
-
-                raise HTTPException(
-                    status_code=404,
-                    detail="KYC details not found"
-                )
-
-            kyc.aadhar_status = "Verified"
-
-            kyc.pan_status = "Verified"
-
-            kyc.selfie_status = "Verified"
-
-            kyc.status = "Approved"
-
-            kyc.rejection_reason = None
-
-            message = (
-                "Creator KYC approved successfully"
+            account = CreatorAccountStatus(
+                creator_id=creator_id
             )
 
-        # ==================================================
-        # REJECTED
-        # ==================================================
-
-        elif data.status == "Rejected":
-
-            if not kyc:
-
-                raise HTTPException(
-                    status_code=404,
-                    detail="KYC details not found"
-                )
-
-            kyc.status = "Rejected"
-
-            kyc.rejection_reason = reason
-
-            message = (
-                "Creator KYC rejected successfully"
-            )
+            db.add(account)
 
         # ==================================================
-        # RE-UPLOAD REQUIRED
+        # UPDATE STATUS
         # ==================================================
 
-        elif data.status == "Re-upload Required":
-
-            if not data.document:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Document is required "
-                        "for re-upload"
-                    )
-                )
-
-            if not kyc:
-
-                raise HTTPException(
-                    status_code=404,
-                    detail="KYC details not found"
-                )
-
-            if data.document == "aadhar":
-
-                kyc.aadhar_status = "Re-upload"
-
-            elif data.document == "pan":
-
-                kyc.pan_status = "Re-upload"
-
-            elif data.document == "selfie":
-
-                kyc.selfie_status = "Re-upload"
-
-            kyc.status = "Re-upload Required"
-
-            kyc.rejection_reason = reason
-
-            message = (
-                f"{data.document} re-upload "
-                "requested successfully"
-            )
-
-        # ==================================================
-        # SAVE
-        # ==================================================
+        account.status = "Suspended"
+        account.reason = reason
+        account.action_by = data.admin_id
 
         db.commit()
 
-        db.refresh(kyc)
+        db.refresh(account)
 
         return {
 
             "status": True,
 
-            "message": message,
+            "message": (
+                "Creator suspended successfully"
+            ),
 
             "creator_id": creator_id,
 
-            "kyc_status": kyc.status,
+            "account_status": "Suspended",
 
-            "reason": kyc.rejection_reason
+            "reason": reason,
+
+            "admin_id": data.admin_id,
+
+            "suspend_days": data.suspend_days
         }
 
     except HTTPException:
@@ -865,14 +1059,131 @@ def update_creator_review_status(
         raise HTTPException(
             status_code=500,
             detail=(
-                f"Failed to update creator KYC status: "
+                f"Failed to suspend creator: "
                 f"{str(e)}"
             )
         )
 
 
 # ==========================================================
-# 3. GET SUSPENDED / BANNED CREATORS
+# 6. BAN CREATOR
+# ==========================================================
+
+@router.post("/{creator_id}/ban")
+def ban_creator(
+    creator_id: int,
+    data: CreatorBanRequest,
+    db: Session = Depends(get_db)
+):
+
+    try:
+
+        # ==================================================
+        # CHECK CREATOR
+        # ==================================================
+
+        creator = db.query(User).filter(
+            User.id == creator_id,
+            User.role == "creator"
+        ).first()
+
+        if not creator:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Creator not found"
+            )
+
+        # ==================================================
+        # VALIDATE REASON
+        # ==================================================
+
+        reason = data.reason.strip()
+
+        if not reason:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Ban reason is required"
+            )
+
+        # ==================================================
+        # GET ACCOUNT STATUS
+        # ==================================================
+
+        account = db.query(
+            CreatorAccountStatus
+        ).filter(
+            CreatorAccountStatus.creator_id
+            == creator_id
+        ).first()
+
+        # ==================================================
+        # CREATE ACCOUNT STATUS IF NOT EXISTS
+        # ==================================================
+
+        if not account:
+
+            account = CreatorAccountStatus(
+                creator_id=creator_id
+            )
+
+            db.add(account)
+
+        # ==================================================
+        # UPDATE STATUS
+        # ==================================================
+
+        account.status = "Banned"
+        account.reason = reason
+        account.action_by = data.admin_id
+
+        db.commit()
+
+        db.refresh(account)
+
+        return {
+
+            "status": True,
+
+            "message": (
+                "Creator banned successfully"
+            ),
+
+            "creator_id": creator_id,
+
+            "account_status": "Banned",
+
+            "reason": reason,
+
+            "admin_id": data.admin_id,
+
+            "fraud_alert_id": (
+                data.fraud_alert_id
+            )
+        }
+
+    except HTTPException:
+
+        db.rollback()
+
+        raise
+
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to ban creator: "
+                f"{str(e)}"
+            )
+        )
+
+
+# ==========================================================
+# 7. GET SUSPENDED / BANNED CREATORS
 # ==========================================================
 
 @router.get("/account-status/{status}")
